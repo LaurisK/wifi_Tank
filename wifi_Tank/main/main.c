@@ -10,6 +10,7 @@
 #include "nvs_flash.h"
 #include "esp_http_server.h"
 #include "esp_netif.h"
+#include "trice.h"
 
 #define WIFI_SSID "Namai"
 #define WIFI_PASS "Slaptazodis123"
@@ -114,6 +115,9 @@ void print_network_scan_tips(void) {
 }
 
 void app_main(void) {
+    // Initialize Trice as early as possible
+    TriceInit();
+
     ESP_LOGI(TAG, "Starting wifi_Tank application");
 
     ESP_ERROR_CHECK(nvs_flash_init());
