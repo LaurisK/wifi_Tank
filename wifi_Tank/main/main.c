@@ -12,6 +12,7 @@
 #include "esp_netif.h"
 #include "trice.h"
 #include "system.h"
+#include "stream.h"
 
 #define WIFI_SSID "Namai"
 #define WIFI_PASS "Slaptazodis123"
@@ -132,6 +133,14 @@ void app_main(void) {
 
     // Initialize system (creates task and TCP server on port 8080)
     SystemInit(8080);
+
+    // Initialize video stream (camera + HTTP MJPEG server on port 81)
+    if (StreamInit(81) == 0) {
+        StreamStart();
+        ESP_LOGI(TAG, "Video stream initialized on port 81");
+    } else {
+        ESP_LOGW(TAG, "Failed to initialize video stream");
+    }
 
     ESP_LOGI(TAG, "Starting web server");
     httpd_handle_t server = start_webserver();
