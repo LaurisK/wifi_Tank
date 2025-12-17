@@ -1,4 +1,4 @@
-idf_component_register(SRCS "main.c"
+idf_component_register(SRCS "main.c" "system.c"
                     INCLUDE_DIRS "."
                     REQUIRES
                         src

@@ -11,6 +11,7 @@
 #include "esp_http_server.h"
 #include "esp_netif.h"
 #include "trice.h"
+#include "system.h"
 
 #define WIFI_SSID "Namai"
 #define WIFI_PASS "Slaptazodis123"
@@ -124,10 +125,15 @@ void app_main(void) {
     wifi_init_sta();
 
     xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdTRUE, portMAX_DELAY);
-    
+
     print_network_scan_tips();
-    
-    ESP_LOGI(TAG, "WiFi connected, starting web server");
+
+    ESP_LOGI(TAG, "WiFi connected, initializing system");
+
+    // Initialize system (creates task and TCP server on port 8080)
+    SystemInit(8080);
+
+    ESP_LOGI(TAG, "Starting web server");
     httpd_handle_t server = start_webserver();
     
     if (server) {
