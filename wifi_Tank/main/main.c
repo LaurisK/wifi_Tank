@@ -84,6 +84,15 @@ void wifi_init_sta(void) {
     ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
 
+    // Performance optimizations: Set WiFi bandwidth to 40MHz for higher throughput
+    ESP_ERROR_CHECK(esp_wifi_set_bandwidth(ESP_IF_WIFI_STA, WIFI_BW_HT40));
+
+    // Enable 802.11n for best performance
+    ESP_ERROR_CHECK(esp_wifi_set_protocol(ESP_IF_WIFI_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N));
+
+    // Disable WiFi power save mode for maximum performance
+    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
+
     ESP_LOGI(TAG, "wifi_init_sta finished.");
     ESP_LOGI(TAG, "connect to ap SSID:%s password:%s", WIFI_SSID, WIFI_PASS);
 }

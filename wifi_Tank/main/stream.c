@@ -87,7 +87,7 @@ static int camera_init(void) {
         .ledc_channel = LEDC_CHANNEL_0,
 
         .pixel_format = PIXFORMAT_JPEG,     // JPEG for streaming
-        .frame_size = FRAMESIZE_VGA,        // 640x480 (VGA)
+        .frame_size = FRAMESIZE_HD,         // 1280x720
         .jpeg_quality = 12,                 // 0-63, lower = higher quality
         .fb_count = 2,                      // Double buffering
         .grab_mode = CAMERA_GRAB_WHEN_EMPTY // Grab next frame when buffer is empty
@@ -202,6 +202,9 @@ static esp_err_t stream_handler(httpd_req_t *req) {
         // Update stats
         stream_state.frame_count++;
         stream_state.last_frame_time = xTaskGetTickCount();
+
+        // Thermal management: Add 100ms delay between frames (~10 fps max)
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 
     // Cleanup
@@ -261,8 +264,11 @@ int StreamInit(uint16_t stream_port) {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = stream_port;
     config.ctrl_port = stream_port + 1;
-    config.max_open_sockets = 7;
+    config.max_open_sockets = 13;  // Increased from 7 for more concurrent clients
     config.lru_purge_enable = true;
+    config.send_wait_timeout = 10;  // Add send timeout
+    config.recv_wait_timeout = 10;  // Add receive timeout
+    config.backlog_conn = 5;  // Add connection backlog
 
     ESP_LOGI(TAG, "Starting stream server on port %d", stream_port);
 
