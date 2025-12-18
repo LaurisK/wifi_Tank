@@ -13,12 +13,35 @@
 #include "trice.h"
 #include "system.h"
 #include "stream.h"
+#include "lwip/netif.h"
+#include "esp_netif_net_stack.h"
 
 #define WIFI_SSID "Namai"
 #define WIFI_PASS "Slaptazodis123"
 #define WEB_SERVER_PORT 80
 
 static const char *TAG = "wifi_Tank";
+
+// Application-level throughput monitoring
+typedef struct {
+    uint32_t total_rx_bytes;
+    uint32_t total_tx_bytes;
+    uint32_t last_rx_bytes;
+    uint32_t last_tx_bytes;
+    uint32_t rx_throughput_kbps;
+    uint32_t tx_throughput_kbps;
+} app_throughput_t;
+
+app_throughput_t app_throughput = {0};  // Made non-static for access from other modules
+
+// Public functions to update throughput counters
+void app_throughput_add_rx(uint32_t bytes) {
+    app_throughput.total_rx_bytes += bytes;
+}
+
+void app_throughput_add_tx(uint32_t bytes) {
+    app_throughput.total_tx_bytes += bytes;
+}
 
 static EventGroupHandle_t wifi_event_group;
 const int WIFI_CONNECTED_BIT = BIT0;
@@ -125,6 +148,37 @@ void print_network_scan_tips(void) {
     ESP_LOGI(TAG, "===============================");
 }
 
+static void throughput_monitor_task(void *pvParameters) {
+    ESP_LOGI(TAG, "Application throughput monitoring started");
+
+    while (1) {
+        // Calculate throughput in kbps (kilobits per second) over 1 second
+        uint32_t rx_bytes_diff = app_throughput.total_rx_bytes - app_throughput.last_rx_bytes;
+        uint32_t tx_bytes_diff = app_throughput.total_tx_bytes - app_throughput.last_tx_bytes;
+
+        app_throughput.rx_throughput_kbps = (rx_bytes_diff * 8) / 1000;  // Convert to kbps
+        app_throughput.tx_throughput_kbps = (tx_bytes_diff * 8) / 1000;  // Convert to kbps
+
+        // Log throughput every second (only if there's activity)
+        if (rx_bytes_diff > 0 || tx_bytes_diff > 0) {
+            ESP_LOGI(TAG, "Throughput - RX: %lu kbps (%.2f Mbps) | TX: %lu kbps (%.2f Mbps) | Total: RX %.2f MB / TX %.2f MB",
+                     app_throughput.rx_throughput_kbps,
+                     app_throughput.rx_throughput_kbps / 1000.0,
+                     app_throughput.tx_throughput_kbps,
+                     app_throughput.tx_throughput_kbps / 1000.0,
+                     app_throughput.total_rx_bytes / (1024.0 * 1024.0),
+                     app_throughput.total_tx_bytes / (1024.0 * 1024.0));
+        }
+
+        // Update last values
+        app_throughput.last_rx_bytes = app_throughput.total_rx_bytes;
+        app_throughput.last_tx_bytes = app_throughput.total_tx_bytes;
+
+        // Wait 1 second before next measurement
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+}
+
 void app_main(void) {
     // Initialize Trice as early as possible
     TriceInit();
@@ -153,8 +207,12 @@ void app_main(void) {
 
     ESP_LOGI(TAG, "Starting web server");
     httpd_handle_t server = start_webserver();
-    
+
     if (server) {
         ESP_LOGI(TAG, "Web server started on port %d", WEB_SERVER_PORT);
     }
+
+    // Start application throughput monitoring task
+    xTaskCreate(throughput_monitor_task, "throughput_mon", 3072, NULL, 5, NULL);
+    ESP_LOGI(TAG, "Application throughput monitoring enabled");
 }

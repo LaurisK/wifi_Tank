@@ -6,4 +6,5 @@ idf_component_register(SRCS "main.c" "system.c" "stream.c"
                         esp_event
                         nvs_flash
                         esp_http_server
-                        esp_netif)
+                        esp_netif
+                        esp_timer)
