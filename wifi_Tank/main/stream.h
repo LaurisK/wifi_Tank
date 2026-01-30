@@ -60,6 +60,15 @@ int StreamGetClientCount(void);
  */
 float StreamGetFps(void);
 
+/**
+ * @brief Get the HTTP server handle
+ *
+ * Used for accessing the server from other modules (e.g., overlay)
+ *
+ * @return HTTP server handle or NULL if not initialized
+ */
+void* StreamGetServerHandle(void);
+
 #ifdef __cplusplus
 }
 #endif

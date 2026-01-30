@@ -13,6 +13,7 @@
 #include "trice.h"
 #include "system.h"
 #include "stream.h"
+#include "overlay.h"
 #include "lwip/netif.h"
 #include "esp_netif_net_stack.h"
 
@@ -179,6 +180,47 @@ static void throughput_monitor_task(void *pvParameters) {
     }
 }
 
+static void overlay_demo_task(void *pvParameters) {
+    ESP_LOGI(TAG, "Overlay demo task started");
+
+    // Wait a bit for everything to initialize
+    vTaskDelay(pdMS_TO_TICKS(5000));
+
+    uint32_t counter = 0;
+
+    while (1) {
+        // Check if there are WebSocket clients connected
+        int client_count = OverlayGetClientCount();
+
+        if (client_count > 0) {
+            overlay_data_t overlay;
+            OverlayCreateSampleData(&overlay);
+
+            // Update dynamic data (battery percentage cycles 0-100)
+            uint8_t battery_pct = (counter % 100);
+            snprintf(overlay.texts[2].content, OVERLAY_MAX_TEXT_LENGTH, "Battery: %d%%", battery_pct);
+
+            // Update speed (cycles 0-100)
+            uint8_t speed_pct = ((counter * 3) % 100);
+            snprintf(overlay.texts[1].content, OVERLAY_MAX_TEXT_LENGTH, "Speed: %d%%", speed_pct);
+
+            // Send overlay update
+            int sent = OverlaySendUpdate(&overlay);
+            if (sent > 0) {
+                ESP_LOGI(TAG, "Sent overlay update #%lu to %d clients", counter, sent);
+            }
+
+            counter++;
+        } else {
+            // No clients, reset counter
+            counter = 0;
+        }
+
+        // Send overlay updates every 2 seconds
+        vTaskDelay(pdMS_TO_TICKS(2000));
+    }
+}
+
 void app_main(void) {
     // Initialize Trice as early as possible
     TriceInit();
@@ -215,4 +257,8 @@ void app_main(void) {
     // Start application throughput monitoring task
     xTaskCreate(throughput_monitor_task, "throughput_mon", 3072, NULL, 5, NULL);
     ESP_LOGI(TAG, "Application throughput monitoring enabled");
+
+    // Start overlay demo task
+    xTaskCreate(overlay_demo_task, "overlay_demo", 3072, NULL, 5, NULL);
+    ESP_LOGI(TAG, "Overlay demo task started - will send sample overlays every 2 seconds");
 }

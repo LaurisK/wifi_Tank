@@ -1,4 +1,4 @@
-idf_component_register(SRCS "main.c" "system.c" "stream.c"
+idf_component_register(SRCS "main.c" "system.c" "stream.c" "overlay.c"
                     INCLUDE_DIRS "."
                     REQUIRES
                         src
@@ -7,4 +7,5 @@ idf_component_register(SRCS "main.c" "system.c" "stream.c"
                         nvs_flash
                         esp_http_server
                         esp_netif
-                        esp_timer)
+                        esp_timer
+                        json)

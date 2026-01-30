@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 WiFi Tank - Video Overlay Demo</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .container {
+            max-width: 1320px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: #4CAF50;
+            margin-bottom: 10px;
+        }
+
+        .status {
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 10px;
+            background-color: #2a2a2a;
+            border-radius: 5px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+
+        .status-indicator.connected {
+            background-color: #4CAF50;
+            box-shadow: 0 0 10px #4CAF50;
+        }
+
+        .status-indicator.disconnected {
+            background-color: #f44336;
+        }
+
+        .video-container {
+            position: relative;
+            width: 1280px;
+            height: 720px;
+            margin: 0 auto;
+            border: 2px solid #444;
+            border-radius: 5px;
+            overflow: hidden;
+            background-color: #000;
+        }
+
+        #videoStream {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        #overlayCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 1280px;
+            height: 720px;
+            pointer-events: none;
+        }
+
+        .controls {
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        input[type="text"] {
+            padding: 8px 12px;
+            font-size: 14px;
+            border: 1px solid #444;
+            border-radius: 4px;
+            background-color: #2a2a2a;
+            color: #fff;
+            margin-right: 10px;
+            width: 200px;
+        }
+
+        button {
+            padding: 8px 16px;
+            font-size: 14px;
+            border: none;
+            border-radius: 4px;
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+            margin: 0 5px;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        button:disabled {
+            background-color: #666;
+            cursor: not-allowed;
+        }
+
+        .info {
+            text-align: center;
+            margin-top: 15px;
+            font-size: 12px;
+            color: #888;
+        }
+
+        .error {
+            color: #f44336;
+            text-align: center;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ESP32 WiFi Tank - Video Overlay Demo</h1>
+
+        <div class="status">
+            <span class="status-indicator" id="wsIndicator"></span>
+            <span id="wsStatus">Disconnected</span>
+            <span style="margin-left: 20px;">|</span>
+            <span style="margin-left: 20px;">Overlay Updates: <span id="updateCount">0</span></span>
+        </div>
+
+        <div class="video-container">
+            <img id="videoStream" alt="Video Stream" />
+            <canvas id="overlayCanvas" width="1280" height="720"></canvas>
+        </div>
+
+        <div class="controls">
+            <input type="text" id="espIp" placeholder="ESP32 IP Address" value="192.168.1.100" />
+            <button id="connectBtn" onclick="connect()">Connect</button>
+            <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+        </div>
+
+        <div class="info">
+            <p>Enter your ESP32's IP address and click Connect to view the video stream with overlays.</p>
+            <p>WebSocket endpoint: ws://[ESP32-IP]:81/ws | Video stream: http://[ESP32-IP]:81/stream</p>
+        </div>
+
+        <div class="error" id="errorMsg"></div>
+    </div>
+
+    <script>
+        let ws = null;
+        let updateCount = 0;
+        let canvas = null;
+        let ctx = null;
+
+        // Initialize canvas
+        window.onload = function() {
+            canvas = document.getElementById('overlayCanvas');
+            ctx = canvas.getContext('2d');
+
+            // Try to get IP from URL parameter
+            const urlParams = new URLSearchParams(window.location.search);
+            const ip = urlParams.get('ip');
+            if (ip) {
+                document.getElementById('espIp').value = ip;
+                connect();
+            }
+        };
+
+        function connect() {
+            const ip = document.getElementById('espIp').value.trim();
+            if (!ip) {
+                showError('Please enter ESP32 IP address');
+                return;
+            }
+
+            // Set video stream source
+            const videoStream = document.getElementById('videoStream');
+            videoStream.src = `http://${ip}:81/stream`;
+            videoStream.onerror = function() {
+                showError('Failed to load video stream. Check IP address and ensure ESP32 is running.');
+            };
+
+            // Connect to WebSocket
+            try {
+                ws = new WebSocket(`ws://${ip}:81/ws`);
+
+                ws.onopen = function() {
+                    updateStatus(true, 'Connected');
+                    document.getElementById('connectBtn').disabled = true;
+                    document.getElementById('disconnectBtn').disabled = false;
+                    showError('');
+                    console.log('WebSocket connected');
+                };
+
+                ws.onmessage = function(event) {
+                    try {
+                        const overlayData = JSON.parse(event.data);
+                        drawOverlay(overlayData);
+                        updateCount++;
+                        document.getElementById('updateCount').textContent = updateCount;
+                    } catch (e) {
+                        console.error('Failed to parse overlay data:', e);
+                    }
+                };
+
+                ws.onerror = function(error) {
+                    console.error('WebSocket error:', error);
+                    showError('WebSocket connection error. Check ESP32 IP and network connection.');
+                };
+
+                ws.onclose = function() {
+                    updateStatus(false, 'Disconnected');
+                    document.getElementById('connectBtn').disabled = false;
+                    document.getElementById('disconnectBtn').disabled = true;
+                    console.log('WebSocket disconnected');
+                };
+
+            } catch (e) {
+                showError('Failed to connect: ' + e.message);
+            }
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+            document.getElementById('videoStream').src = '';
+            clearCanvas();
+            updateCount = 0;
+            document.getElementById('updateCount').textContent = '0';
+        }
+
+        function updateStatus(connected, text) {
+            const indicator = document.getElementById('wsIndicator');
+            const status = document.getElementById('wsStatus');
+
+            if (connected) {
+                indicator.classList.add('connected');
+                indicator.classList.remove('disconnected');
+            } else {
+                indicator.classList.add('disconnected');
+                indicator.classList.remove('connected');
+            }
+
+            status.textContent = text;
+        }
+
+        function showError(msg) {
+            document.getElementById('errorMsg').textContent = msg;
+        }
+
+        function clearCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function drawOverlay(data) {
+            // Clear previous overlay
+            clearCanvas();
+
+            // Draw text overlays
+            if (data.text && Array.isArray(data.text)) {
+                data.text.forEach(function(textObj) {
+                    ctx.font = `${textObj.size}px Arial`;
+                    ctx.fillStyle = textObj.color;
+                    ctx.strokeStyle = 'black';
+                    ctx.lineWidth = 2;
+
+                    // Draw text with outline for better visibility
+                    ctx.strokeText(textObj.content, textObj.x, textObj.y);
+                    ctx.fillText(textObj.content, textObj.x, textObj.y);
+                });
+            }
+
+            // Draw shape overlays
+            if (data.shapes && Array.isArray(data.shapes)) {
+                data.shapes.forEach(function(shape) {
+                    ctx.strokeStyle = shape.color;
+                    ctx.fillStyle = shape.color;
+                    ctx.lineWidth = shape.width || 2;
+
+                    if (shape.type === 'line') {
+                        ctx.beginPath();
+                        ctx.moveTo(shape.x1, shape.y1);
+                        ctx.lineTo(shape.x2, shape.y2);
+                        ctx.stroke();
+                    }
+                    else if (shape.type === 'rect') {
+                        if (shape.fill) {
+                            ctx.fillRect(shape.x, shape.y, shape.w, shape.h);
+                        } else {
+                            ctx.strokeRect(shape.x, shape.y, shape.w, shape.h);
+                        }
+                    }
+                    else if (shape.type === 'circle') {
+                        ctx.beginPath();
+                        ctx.arc(shape.x, shape.y, shape.r, 0, 2 * Math.PI);
+                        if (shape.fill) {
+                            ctx.fill();
+                        } else {
+                            ctx.stroke();
+                        }
+                    }
+                });
+            }
+        }
+
+        // Handle Enter key in IP input
+        document.getElementById('espIp').addEventListener('keypress', function(event) {
+            if (event.key === 'Enter') {
+                connect();
+            }
+        });
+    </script>
+</body>
+</html>

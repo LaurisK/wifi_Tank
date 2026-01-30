@@ -3,6 +3,7 @@
 *******************************************************************************/
 
 #include "stream.h"
+#include "overlay.h"
 #include "esp_log.h"
 #include "esp_http_server.h"
 #include "esp_camera.h"
@@ -301,6 +302,13 @@ int StreamInit(uint16_t stream_port) {
     ESP_LOGI(TAG, "Stream available at: http://[ESP32-IP]:%d/stream", stream_port);
     ESP_LOGI(TAG, "Info page at: http://[ESP32-IP]:%d/", stream_port);
 
+    // Initialize overlay WebSocket system
+    if (OverlayInit(stream_state.server) == 0) {
+        ESP_LOGI(TAG, "Overlay WebSocket initialized at: ws://[ESP32-IP]:%d/ws", stream_port);
+    } else {
+        ESP_LOGW(TAG, "Failed to initialize overlay WebSocket");
+    }
+
     return 0;
 }
 
@@ -341,4 +349,8 @@ float StreamGetFps(void) {
     }
 
     return 1000.0f / elapsed_ms;
+}
+
+void* StreamGetServerHandle(void) {
+    return stream_state.server;
 }
