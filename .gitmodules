@@ -1,0 +1,3 @@
+[submodule "wifi_Tank/Submodules/trice"]
+	path = wifi_Tank/Submodules/trice
+	url = https://github.com/LaurisK/trice.git
