@@ -17,8 +17,16 @@
 #include "lwip/netif.h"
 #include "esp_netif_net_stack.h"
 
+// #define NAMAI
+#define DARBAS
+
+#if defined(NAMAI)
 #define WIFI_SSID "Namai"
 #define WIFI_PASS "Slaptazodis123"
+#elif defined(DARBAS)
+#define WIFI_SSID "#Telia-BCBEFE"
+#define WIFI_PASS "fM3udPwhvw91N1ds"
+#endif
 #define WEB_SERVER_PORT 80
 
 static const char *TAG = "wifi_Tank";
@@ -259,6 +267,6 @@ void app_main(void) {
     ESP_LOGI(TAG, "Application throughput monitoring enabled");
 
     // Start overlay demo task
-    xTaskCreate(overlay_demo_task, "overlay_demo", 3072, NULL, 5, NULL);
+    xTaskCreate(overlay_demo_task, "overlay_demo", 4096, NULL, 5, NULL);
     ESP_LOGI(TAG, "Overlay demo task started - will send sample overlays every 2 seconds");
 }

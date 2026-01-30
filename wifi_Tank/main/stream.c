@@ -219,32 +219,17 @@ static esp_err_t stream_handler(httpd_req_t *req) {
     return res;
 }
 
+// Embedded overlay demo HTML page
+extern const uint8_t overlay_demo_html_start[] asm("_binary_overlay_demo_html_start");
+extern const uint8_t overlay_demo_html_end[]   asm("_binary_overlay_demo_html_end");
+
 /**
- * @brief HTTP handler for stream info/status page
+ * @brief HTTP handler serving the overlay demo page
  */
 static esp_err_t stream_info_handler(httpd_req_t *req) {
-    char response[512];
-    sensor_t *s = esp_camera_sensor_get();
-
-    snprintf(response, sizeof(response),
-             "<!DOCTYPE html><html><head><title>ESP32-CAM Stream</title></head>"
-             "<body><h1>ESP32-CAM Video Stream</h1>"
-             "<p>Camera: %s (PID:0x%02x VER:0x%02x)</p>"
-             "<p>Resolution: %s</p>"
-             "<p>Clients: %d</p>"
-             "<p>Frames: %"PRIu32"</p>"
-             "<p><a href=\"/stream\">View Stream</a></p>"
-             "<img src=\"/stream\" width=\"640\" height=\"480\">"
-             "</body></html>",
-             s ? "OV3660" : "Unknown",
-             s ? s->id.PID : 0,
-             s ? s->id.VER : 0,
-             "VGA (640x480)",
-             stream_state.client_count,
-             stream_state.frame_count);
-
     httpd_resp_set_type(req, "text/html");
-    return httpd_resp_send(req, response, strlen(response));
+    size_t len = overlay_demo_html_end - overlay_demo_html_start;
+    return httpd_resp_send(req, (const char *)overlay_demo_html_start, len);
 }
 
 int StreamInit(uint16_t stream_port) {

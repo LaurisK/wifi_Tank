@@ -175,6 +175,10 @@
             if (ip) {
                 document.getElementById('espIp').value = ip;
                 connect();
+            } else if (window.location.hostname && window.location.protocol !== 'file:') {
+                // Auto-connect when served from the ESP32 itself
+                document.getElementById('espIp').value = window.location.hostname;
+                connect();
             }
         };
 

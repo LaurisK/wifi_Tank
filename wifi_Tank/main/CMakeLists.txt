@@ -8,4 +8,6 @@ idf_component_register(SRCS "main.c" "system.c" "stream.c" "overlay.c"
                         esp_http_server
                         esp_netif
                         esp_timer
-                        json)
+                        json
+                    EMBED_TXTFILES
+                        "${PROJECT_DIR}/overlay_demo.html")
