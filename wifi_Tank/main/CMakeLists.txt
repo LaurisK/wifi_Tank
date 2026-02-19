@@ -9,7 +9,7 @@ idf_component_register(SRCS "main.c" "system.c" "stream.c" "overlay.c" "provisio
                         esp_netif
                         esp_timer
                         json
-                        mdns
+                        espressif__mdns
                     EMBED_TXTFILES
                         "${PROJECT_DIR}/overlay_demo.html"
                         "${PROJECT_DIR}/provisioning.html")
