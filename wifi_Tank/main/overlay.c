@@ -67,6 +67,7 @@ static char* overlay_to_json(const overlay_data_t *overlay) {
         const char *type_str = "line";
         if (shape->type == OVERLAY_SHAPE_RECT) type_str = "rect";
         else if (shape->type == OVERLAY_SHAPE_CIRCLE) type_str = "circle";
+        else if (shape->type == OVERLAY_SHAPE_TRIANGLE) type_str = "triangle";
         cJSON_AddStringToObject(shape_obj, "type", type_str);
 
         // Add coordinates based on type
@@ -86,6 +87,14 @@ static char* overlay_to_json(const overlay_data_t *overlay) {
             cJSON_AddNumberToObject(shape_obj, "x", shape->x1);
             cJSON_AddNumberToObject(shape_obj, "y", shape->y1);
             cJSON_AddNumberToObject(shape_obj, "r", shape->radius);
+            cJSON_AddBoolToObject(shape_obj, "fill", shape->fill);
+        } else if (shape->type == OVERLAY_SHAPE_TRIANGLE) {
+            cJSON_AddNumberToObject(shape_obj, "x1", shape->x1);
+            cJSON_AddNumberToObject(shape_obj, "y1", shape->y1);
+            cJSON_AddNumberToObject(shape_obj, "x2", shape->x2);
+            cJSON_AddNumberToObject(shape_obj, "y2", shape->y2);
+            cJSON_AddNumberToObject(shape_obj, "x3", shape->x3);
+            cJSON_AddNumberToObject(shape_obj, "y3", shape->y3);
             cJSON_AddBoolToObject(shape_obj, "fill", shape->fill);
         }
 
@@ -320,7 +329,7 @@ void OverlayCreateSampleData(overlay_data_t *overlay) {
     memset(overlay, 0, sizeof(overlay_data_t));
 
     // Add sample text overlays
-    overlay->text_count = 3;
+    overlay->text_count = 2;
 
     snprintf(overlay->texts[0].content, OVERLAY_MAX_TEXT_LENGTH, "ESP32 WiFi Tank");
     overlay->texts[0].x = 10;
@@ -328,57 +337,42 @@ void OverlayCreateSampleData(overlay_data_t *overlay) {
     strncpy(overlay->texts[0].color, "white", OVERLAY_MAX_COLOR_LENGTH);
     overlay->texts[0].size = 20;
 
-    snprintf(overlay->texts[1].content, OVERLAY_MAX_TEXT_LENGTH, "Speed: 50%%");
+    // FPS text placeholder (updated dynamically in overlay_demo_task)
+    snprintf(overlay->texts[1].content, OVERLAY_MAX_TEXT_LENGTH, "FPS: --");
     overlay->texts[1].x = 10;
     overlay->texts[1].y = 60;
     strncpy(overlay->texts[1].color, "lime", OVERLAY_MAX_COLOR_LENGTH);
     overlay->texts[1].size = 16;
 
-    snprintf(overlay->texts[2].content, OVERLAY_MAX_TEXT_LENGTH, "Battery: 85%%");
-    overlay->texts[2].x = 10;
-    overlay->texts[2].y = 85;
-    strncpy(overlay->texts[2].color, "cyan", OVERLAY_MAX_COLOR_LENGTH);
-    overlay->texts[2].size = 16;
+    // Add triangle shape
+    overlay->shape_count = 1;
 
-    // Add sample shapes
-    overlay->shape_count = 4;
-
-    // Vertical crosshair line
-    overlay->shapes[0].type = OVERLAY_SHAPE_LINE;
-    overlay->shapes[0].x1 = 640;
-    overlay->shapes[0].y1 = 0;
-    overlay->shapes[0].x2 = 640;
-    overlay->shapes[0].y2 = 720;
-    strncpy(overlay->shapes[0].color, "red", OVERLAY_MAX_COLOR_LENGTH);
+    overlay->shapes[0].type = OVERLAY_SHAPE_TRIANGLE;
+    overlay->shapes[0].x1 = 640;   // Top vertex (center, 30% from top)
+    overlay->shapes[0].y1 = 216;
+    overlay->shapes[0].x2 = 576;   // Bottom-left (70% from top)
+    overlay->shapes[0].y2 = 504;
+    overlay->shapes[0].x3 = 704;   // Bottom-right (70% from top)
+    overlay->shapes[0].y3 = 504;
+    strncpy(overlay->shapes[0].color, "yellow", OVERLAY_MAX_COLOR_LENGTH);
     overlay->shapes[0].width = 2;
-
-    // Horizontal crosshair line
-    overlay->shapes[1].type = OVERLAY_SHAPE_LINE;
-    overlay->shapes[1].x1 = 0;
-    overlay->shapes[1].y1 = 360;
-    overlay->shapes[1].x2 = 1280;
-    overlay->shapes[1].y2 = 360;
-    strncpy(overlay->shapes[1].color, "red", OVERLAY_MAX_COLOR_LENGTH);
-    overlay->shapes[1].width = 2;
-
-    // Target rectangle
-    overlay->shapes[2].type = OVERLAY_SHAPE_RECT;
-    overlay->shapes[2].x1 = 500;
-    overlay->shapes[2].y1 = 250;
-    overlay->shapes[2].x2 = 100;  // width
-    overlay->shapes[2].y2 = 80;   // height
-    strncpy(overlay->shapes[2].color, "yellow", OVERLAY_MAX_COLOR_LENGTH);
-    overlay->shapes[2].fill = false;
-
-    // Status indicator circle
-    overlay->shapes[3].type = OVERLAY_SHAPE_CIRCLE;
-    overlay->shapes[3].x1 = 1250;
-    overlay->shapes[3].y1 = 30;
-    overlay->shapes[3].radius = 15;
-    strncpy(overlay->shapes[3].color, "lime", OVERLAY_MAX_COLOR_LENGTH);
-    overlay->shapes[3].fill = true;
+    overlay->shapes[0].fill = false;
 }
 
 int OverlayGetClientCount(void) {
-    return overlay_state.client_count;
+    if (!overlay_state.initialized || overlay_state.server == NULL) {
+        return 0;
+    }
+
+    httpd_handle_t hd = overlay_state.server;
+    int count = 0;
+
+    for (int fd = 3; fd < CONFIG_LWIP_MAX_SOCKETS; fd++) {
+        if (httpd_ws_get_fd_info(hd, fd) == HTTPD_WS_CLIENT_WEBSOCKET) {
+            count++;
+        }
+    }
+
+    overlay_state.client_count = count;
+    return count;
 }

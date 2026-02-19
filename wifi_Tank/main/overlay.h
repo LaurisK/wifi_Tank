@@ -23,7 +23,8 @@ extern "C" {
 typedef enum {
     OVERLAY_SHAPE_LINE = 0,
     OVERLAY_SHAPE_RECT,
-    OVERLAY_SHAPE_CIRCLE
+    OVERLAY_SHAPE_CIRCLE,
+    OVERLAY_SHAPE_TRIANGLE
 } overlay_shape_type_t;
 
 // Text overlay element
@@ -40,6 +41,7 @@ typedef struct {
     overlay_shape_type_t type;
     int16_t x1, y1;  // Start point or center (for circle)
     int16_t x2, y2;  // End point or width/height (for rect)
+    int16_t x3, y3;  // Third vertex (for triangle)
     int16_t radius;  // For circle
     char color[OVERLAY_MAX_COLOR_LENGTH];
     uint8_t width;   // Line width

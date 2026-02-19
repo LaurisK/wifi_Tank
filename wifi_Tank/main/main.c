@@ -204,13 +204,9 @@ static void overlay_demo_task(void *pvParameters) {
             overlay_data_t overlay;
             OverlayCreateSampleData(&overlay);
 
-            // Update dynamic data (battery percentage cycles 0-100)
-            uint8_t battery_pct = (counter % 100);
-            snprintf(overlay.texts[2].content, OVERLAY_MAX_TEXT_LENGTH, "Battery: %d%%", battery_pct);
-
-            // Update speed (cycles 0-100)
-            uint8_t speed_pct = ((counter * 3) % 100);
-            snprintf(overlay.texts[1].content, OVERLAY_MAX_TEXT_LENGTH, "Speed: %d%%", speed_pct);
+            // Update FPS text
+            float fps = StreamGetFps();
+            snprintf(overlay.texts[1].content, OVERLAY_MAX_TEXT_LENGTH, "FPS: %.1f", fps);
 
             // Send overlay update
             int sent = OverlaySendUpdate(&overlay);
