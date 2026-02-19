@@ -17,6 +17,7 @@
 #include "lwip/netif.h"
 #include "esp_netif_net_stack.h"
 #include "provisioning.h"
+#include "mdns.h"
 
 #define WEB_SERVER_PORT 80
 
@@ -70,6 +71,19 @@ static httpd_handle_t start_webserver(void) {
 
     ESP_LOGI(TAG, "Error starting server!");
     return NULL;
+}
+
+static void mdns_start(void) {
+    ESP_ERROR_CHECK(mdns_init());
+    mdns_hostname_set("tank");
+    mdns_instance_name_set("Tank Robot");
+
+    // Advertise each service so clients can discover them
+    mdns_service_add("Tank Web",    "_http",  "_tcp", WEB_SERVER_PORT, NULL, 0);
+    mdns_service_add("Tank Stream", "_http",  "_tcp", 81,              NULL, 0);
+    mdns_service_add("Tank Ctrl",   "_tank",  "_tcp", 8080,            NULL, 0);
+
+    ESP_LOGI(TAG, "mDNS started — device reachable as http://tank.local");
 }
 
 void print_network_scan_tips(void) {
@@ -165,6 +179,7 @@ void app_main(void) {
 
     xEventGroupWaitBits(wifi_event_group, BIT0, pdFALSE, pdTRUE, portMAX_DELAY);
 
+    mdns_start();
     print_network_scan_tips();
 
     ESP_LOGI(TAG, "WiFi connected, initializing system");

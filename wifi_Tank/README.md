@@ -46,11 +46,15 @@ idf.py -p /dev/ttyUSB0 flash monitor
 
 The serial monitor shows startup logs including the obtained IP address. Press `Ctrl+]` to exit the monitor.
 
-To find the device on your network after boot:
+Once connected to WiFi, the device advertises itself via **mDNS** as `tank.local`. No IP lookup needed — just open:
 
-```bash
-nmap -sn 192.168.1.0/24   # adjust subnet to match your router
 ```
+http://tank.local
+```
+
+Works on Linux (requires `avahi-daemon`, running by default on most distros), Windows 10+, and Android (Chrome/Firefox resolve `.local` natively).
+
+The IP address is still printed to the serial monitor on connect as a fallback.
 
 ## WiFi Provisioning
 
@@ -72,18 +76,18 @@ idf.py -p /dev/ttyUSB0 erase-flash   # wipes everything including NVS
 
 ### Network Services
 
-| Port | Protocol | Description |
-|------|----------|-------------|
-| 80   | HTTP     | Main web server |
-| 81   | HTTP / WebSocket | Video stream + overlay |
-| 8080 | TCP (raw) | System control channel |
+| Port | Protocol | URL | Description |
+|------|----------|-----|-------------|
+| 80   | HTTP     | `http://tank.local` | Main web server |
+| 81   | HTTP / WebSocket | `http://tank.local:81` | Video stream + overlay |
+| 8080 | TCP (raw) | `tank.local:8080` | System control channel |
 
 ### Video Stream — port 81
 
 Open the stream in any MJPEG-capable client (browser, VLC, ffplay):
 
 ```
-http://<device-ip>:81/stream
+http://tank.local:81/stream
 ```
 
 - Format: MJPEG multipart HTTP stream
@@ -92,11 +96,11 @@ http://<device-ip>:81/stream
 - Up to 13 concurrent clients
 - FPS is tracked and exposed via the overlay WebSocket
 
-A plain info page is served at `http://<device-ip>:81/`.
+A plain info page is served at `http://tank.local:81/`.
 
 ### Overlay WebSocket — port 81
 
-Connect to `ws://<device-ip>:81/ws` to receive real-time overlay data as JSON. The server pushes an update every 2 seconds containing:
+Connect to `ws://tank.local:81/ws` to receive real-time overlay data as JSON. The server pushes an update every 2 seconds containing:
 
 - **Text elements** — up to 10 items, each with position, colour, size, and content (e.g. current FPS)
 - **Shape elements** — up to 20 shapes: lines, rectangles, circles, triangles
@@ -108,7 +112,7 @@ Up to 8 WebSocket clients can be connected simultaneously.
 ### Main HTTP Server — port 80
 
 ```
-GET http://<device-ip>/    →  "hello world"
+GET http://tank.local/    →  "hello world"
 ```
 
 Placeholder endpoint; intended for future control UI.
