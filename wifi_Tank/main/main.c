@@ -16,17 +16,8 @@
 #include "overlay.h"
 #include "lwip/netif.h"
 #include "esp_netif_net_stack.h"
+#include "provisioning.h"
 
-// #define NAMAI
-#define DARBAS
-
-#if defined(NAMAI)
-#define WIFI_SSID "Namai"
-#define WIFI_PASS "Slaptazodis123"
-#elif defined(DARBAS)
-#define WIFI_SSID "#Telia-BCBEFE"
-#define WIFI_PASS "fM3udPwhvw91N1ds"
-#endif
 #define WEB_SERVER_PORT 80
 
 static const char *TAG = "wifi_Tank";
@@ -52,9 +43,6 @@ void app_throughput_add_tx(uint32_t bytes) {
     app_throughput.total_tx_bytes += bytes;
 }
 
-static EventGroupHandle_t wifi_event_group;
-const int WIFI_CONNECTED_BIT = BIT0;
-
 static esp_err_t root_get_handler(httpd_req_t *req) {
     const char *resp = "hello world";
     httpd_resp_send(req, resp, strlen(resp));
@@ -67,67 +55,6 @@ static const httpd_uri_t root = {
     .handler = root_get_handler,
     .user_ctx = NULL
 };
-
-static void wifi_event_handler(void* arg, esp_event_base_t event_base,
-                               int32_t event_id, void* event_data) {
-    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
-        esp_wifi_connect();
-    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        esp_wifi_connect();
-        ESP_LOGI(TAG, "retry to connect to the AP");
-    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
-        ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
-        ESP_LOGI(TAG, "=== WIFI CONNECTED ===");
-        ESP_LOGI(TAG, "Device IP Address: " IPSTR, IP2STR(&event->ip_info.ip));
-        ESP_LOGI(TAG, "Netmask: " IPSTR, IP2STR(&event->ip_info.netmask));
-        ESP_LOGI(TAG, "Gateway: " IPSTR, IP2STR(&event->ip_info.gw));
-        ESP_LOGI(TAG, "Web server available at: http://" IPSTR ":%d", IP2STR(&event->ip_info.ip), WEB_SERVER_PORT);
-        ESP_LOGI(TAG, "========================");
-        xEventGroupSetBits(wifi_event_group, WIFI_CONNECTED_BIT);
-    }
-}
-
-void wifi_init_sta(void) {
-    wifi_event_group = xEventGroupCreate();
-
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_create_default_wifi_sta();
-
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-
-    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL));
-
-    wifi_config_t wifi_config = {
-        .sta = {
-            .ssid = WIFI_SSID,
-            .password = WIFI_PASS,
-            .threshold.authmode = WIFI_AUTH_WPA2_PSK,
-            .pmf_cfg = {
-                .capable = true,
-                .required = false
-            },
-        },
-    };
-
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
-    ESP_ERROR_CHECK(esp_wifi_start());
-
-    // Performance optimizations: Set WiFi bandwidth to 40MHz for higher throughput
-    ESP_ERROR_CHECK(esp_wifi_set_bandwidth(ESP_IF_WIFI_STA, WIFI_BW_HT40));
-
-    // Enable 802.11n for best performance
-    ESP_ERROR_CHECK(esp_wifi_set_protocol(ESP_IF_WIFI_STA, WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N));
-
-    // Disable WiFi power save mode for maximum performance
-    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
-
-    ESP_LOGI(TAG, "wifi_init_sta finished.");
-    ESP_LOGI(TAG, "connect to ap SSID:%s password:%s", WIFI_SSID, WIFI_PASS);
-}
 
 static httpd_handle_t start_webserver(void) {
     httpd_handle_t server = NULL;
@@ -232,9 +159,11 @@ void app_main(void) {
     ESP_LOGI(TAG, "Starting wifi_Tank application");
 
     ESP_ERROR_CHECK(nvs_flash_init());
-    wifi_init_sta();
 
-    xEventGroupWaitBits(wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdTRUE, portMAX_DELAY);
+    EventGroupHandle_t wifi_event_group;
+    ProvisioningStart(&wifi_event_group);
+
+    xEventGroupWaitBits(wifi_event_group, BIT0, pdFALSE, pdTRUE, portMAX_DELAY);
 
     print_network_scan_tips();
 

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tank WiFi Setup</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #1a1a2e;
+    color: #e0e0e0;
+    font-family: Arial, sans-serif;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+  }
+  .card {
+    background: #16213e;
+    border: 1px solid #0f3460;
+    border-radius: 12px;
+    padding: 32px 28px;
+    width: 100%;
+    max-width: 380px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+  }
+  h1 {
+    font-size: 1.5rem;
+    color: #e94560;
+    margin-bottom: 8px;
+    text-align: center;
+  }
+  .hint {
+    font-size: 0.82rem;
+    color: #888;
+    text-align: center;
+    margin-bottom: 24px;
+    line-height: 1.5;
+  }
+  label {
+    display: block;
+    font-size: 0.88rem;
+    color: #aaa;
+    margin-bottom: 6px;
+  }
+  input {
+    width: 100%;
+    padding: 10px 12px;
+    margin-bottom: 18px;
+    background: #0f3460;
+    border: 1px solid #1a4a80;
+    border-radius: 6px;
+    color: #e0e0e0;
+    font-size: 1rem;
+    outline: none;
+  }
+  input:focus {
+    border-color: #e94560;
+  }
+  button {
+    width: 100%;
+    padding: 12px;
+    background: #e94560;
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    font-size: 1rem;
+    cursor: pointer;
+    font-weight: bold;
+    letter-spacing: 0.5px;
+  }
+  button:hover { background: #c73652; }
+  button:active { background: #a02a42; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Tank WiFi Setup</h1>
+  <p class="hint">Connect to <strong>Tank-Setup</strong> then open<br>http://192.168.4.1</p>
+  <form method="POST" action="/configure">
+    <label for="ssid">Network SSID</label>
+    <input id="ssid" name="ssid" type="text" placeholder="Your WiFi name" autocomplete="off" required>
+    <label for="pass">Password</label>
+    <input id="pass" name="pass" type="password" placeholder="Your WiFi password" autocomplete="off">
+    <button type="submit">Save &amp; Connect</button>
+  </form>
+</div>
+</body>
+</html>

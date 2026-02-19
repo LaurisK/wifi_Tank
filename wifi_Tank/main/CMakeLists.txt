@@ -1,4 +1,4 @@
-idf_component_register(SRCS "main.c" "system.c" "stream.c" "overlay.c"
+idf_component_register(SRCS "main.c" "system.c" "stream.c" "overlay.c" "provisioning.c"
                     INCLUDE_DIRS "."
                     REQUIRES
                         src
@@ -10,4 +10,5 @@ idf_component_register(SRCS "main.c" "system.c" "stream.c" "overlay.c"
                         esp_timer
                         json
                     EMBED_TXTFILES
-                        "${PROJECT_DIR}/overlay_demo.html")
+                        "${PROJECT_DIR}/overlay_demo.html"
+                        "${PROJECT_DIR}/provisioning.html")
