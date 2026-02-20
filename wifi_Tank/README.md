@@ -72,14 +72,74 @@ idf.py -p /dev/ttyUSB0 erase-flash   # wipes everything including NVS
 # or call ProvisioningClearCredentials() from code and reboot
 ```
 
+## OTA Firmware Update
+
+Once the device is on WiFi, all future firmware updates can be done over the network — no USB cable required.
+
+> **First flash after enabling OTA partitions**: If you have just switched from the old single `factory` partition layout to the new dual OTA layout (i.e. you changed `partitions.csv`), you must flash once via USB to write the new partition table. After that, all further updates go OTA.
+>
+> ```bash
+> idf.py -p /dev/ttyUSB0 flash
+> ```
+
+### Step-by-step OTA upload
+
+**1. Build the new firmware**
+
+```bash
+idf.py build
+# Produces build/wifi_Tank.bin (~1.1 MB)
+```
+
+**2. (Optional) Check what version is currently running**
+
+```bash
+curl http://tank.local/version
+# {"version":"1.0","project":"wifi_Tank","date":"Feb 20 2026","time":"16:00:00","partition":"ota_0"}
+```
+
+**3. Upload the binary**
+
+```bash
+curl -X POST http://tank.local/ota \
+     --data-binary @build/wifi_Tank.bin
+```
+
+Progress is logged to the serial monitor in 64 KB increments. A successful upload returns:
+
+```json
+{"status":"ok","message":"OTA complete, rebooting"}
+```
+
+The device reboots automatically ~500 ms after the response is sent.
+
+**4. Verify the update**
+
+Wait a few seconds for the reboot, then confirm the new firmware is running:
+
+```bash
+curl http://tank.local/version
+# partition should now show "ota_1" (or back to "ota_0" on the next update)
+```
+
+### How it works
+
+- Flash has two equal app partitions: `ota_0` (offset `0x20000`) and `ota_1` (offset `0x210000`), each 1984 KB.
+- The `otadata` partition (8 KB at `0x10000`) records which slot to boot.
+- On each successful OTA the device writes to the **inactive** slot and marks it as the new boot target. Slots alternate: `ota_0 → ota_1 → ota_0 → …`
+- WiFi credentials (NVS partition) are in a completely separate region and are **never touched** by an OTA update.
+- There is no authentication on the `/ota` endpoint — use only on a trusted network.
+
 ## Capabilities
 
 ### Network Services
 
 | Port | Protocol | URL | Description |
 |------|----------|-----|-------------|
-| 80   | HTTP     | `http://tank.local` | Main web server |
-| 81   | HTTP / WebSocket | `http://tank.local:81` | Video stream + overlay |
+| 80   | HTTP     | `http://tank.local` | Main web server, OTA |
+| 80   | WebSocket | `ws://tank.local/ws` | Overlay data |
+| 80   | WebSocket | `ws://tank.local/ctrl` | Motor control |
+| 81   | HTTP     | `http://tank.local:81` | MJPEG video stream |
 | 8080 | TCP (raw) | `tank.local:8080` | System control channel |
 
 ### Video Stream — port 81
@@ -111,11 +171,11 @@ Up to 8 WebSocket clients can be connected simultaneously.
 
 ### Main HTTP Server — port 80
 
-```
-GET http://tank.local/    →  "hello world"
-```
-
-Placeholder endpoint; intended for future control UI.
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/` | Placeholder ("hello world") |
+| `GET` | `/version` | Firmware version and running OTA partition as JSON |
+| `POST` | `/ota` | Upload a new firmware binary; reboots on success |
 
 ### TCP System Server — port 8080
 
@@ -133,7 +193,7 @@ Throughput - RX: 450 kbps (0.45 Mbps) | TX: 3200 kbps (3.20 Mbps) | Total: RX 0.
 
 - **MCU**: ESP32 (AI-Thinker ESP32-CAM form factor)
 - **Camera**: OV3660
-- **Flash**: 2 MB app partition (see `partitions.csv`)
+- **Flash**: 4 MB — dual OTA partitions (2 × 1984 KB) + NVS + PHY + OTA data (see `partitions.csv`)
 - **XCLK**: 20 MHz on GPIO 0
 - **Camera data bus**: GPIOs 5, 18, 19, 21, 34, 35, 36, 39
 - **VSYNC / HREF / PCLK**: GPIOs 25, 23, 22
@@ -149,7 +209,8 @@ wifi_Tank/
 │   ├── provisioning.c  # SoftAP setup, NVS credential management
 │   ├── stream.c        # Camera init, MJPEG HTTP server (port 81)
 │   ├── overlay.c       # WebSocket overlay system
-│   └── system.c        # TCP server (port 8080)
+│   ├── system.c        # TCP server (port 8080)
+│   └── ota.c           # OTA firmware update (POST /ota, GET /version)
 ├── provisioning.html   # WiFi setup page (embedded into firmware)
 ├── overlay_demo.html   # Browser overlay demo
 ├── partitions.csv      # Custom partition table

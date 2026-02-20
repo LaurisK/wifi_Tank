@@ -1,4 +1,4 @@
-idf_component_register(SRCS "main.c" "system.c" "stream.c" "overlay.c" "provisioning.c" "motor.c" "control.c"
+idf_component_register(SRCS "main.c" "system.c" "stream.c" "overlay.c" "provisioning.c" "motor.c" "control.c" "ota.c"
                     INCLUDE_DIRS "."
                     REQUIRES
                         src
@@ -11,6 +11,7 @@ idf_component_register(SRCS "main.c" "system.c" "stream.c" "overlay.c" "provisio
                         json
                         espressif__mdns
                         driver
+                        app_update
                     EMBED_TXTFILES
                         "${PROJECT_DIR}/overlay_demo.html"
                         "${PROJECT_DIR}/provisioning.html")

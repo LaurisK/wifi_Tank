@@ -20,6 +20,7 @@
 #include "mdns.h"
 #include "motor.h"
 #include "control.h"
+#include "ota.h"
 
 #define WEB_SERVER_PORT 80
 
@@ -64,6 +65,7 @@ static httpd_handle_t start_webserver(void) {
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.server_port = WEB_SERVER_PORT;
     config.lru_purge_enable = true;
+    config.stack_size = 8192;  // Increased for OTA upload handler
 
     if (httpd_start(&server, &config) == ESP_OK) {
         ESP_LOGI(TAG, "Registering URI handlers");
@@ -231,6 +233,8 @@ void app_main(void) {
         } else {
             ESP_LOGW(TAG, "Failed to initialize control WebSocket");
         }
+
+        OtaInit(server);
     }
 
     // Start application throughput monitoring task
