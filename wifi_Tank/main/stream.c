@@ -284,8 +284,8 @@ int StreamInit(uint16_t stream_port) {
     stream_state.port = stream_port;
 
     ESP_LOGI(TAG, "Stream server started successfully");
-    ESP_LOGI(TAG, "Stream available at: http://[ESP32-IP]:%d/stream", stream_port);
-    ESP_LOGI(TAG, "Info page at: http://[ESP32-IP]:%d/", stream_port);
+    ESP_LOGI(TAG, "Stream available at: http://tank.local:%d/stream", stream_port);
+    ESP_LOGI(TAG, "Info page at: http://tank.local:%d/", stream_port);
 
     return 0;
 }

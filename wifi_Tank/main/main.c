@@ -91,15 +91,7 @@ static void mdns_start(void) {
 }
 
 void print_network_scan_tips(void) {
-    ESP_LOGI(TAG, "");
-    ESP_LOGI(TAG, "=== NETWORK SCANNING TIPS ===");
-    ESP_LOGI(TAG, "To find your ESP32 device on the network:");
-    ESP_LOGI(TAG, "1. Use 'nmap -sn 192.168.1.0/24' (adjust subnet)");
-    ESP_LOGI(TAG, "2. Check your router's connected devices list");
-    ESP_LOGI(TAG, "3. Use 'ping 192.168.1.X' to test connectivity");
-    ESP_LOGI(TAG, "4. Access http://[IP_ADDRESS] in browser to test web server");
-    ESP_LOGI(TAG, "5. For Windows: 'arp -a' shows ARP table");
-    ESP_LOGI(TAG, "===============================");
+    ESP_LOGI(TAG, "Device reachable at http://tank.local");
 }
 
 static void throughput_monitor_task(void *pvParameters) {
@@ -223,13 +215,13 @@ void app_main(void) {
         // NOTE: Must NOT be on the stream server (port 81) — the stream handler
         // blocks the httpd task, preventing any WS connections from being processed.
         if (OverlayInit(server) == 0) {
-            ESP_LOGI(TAG, "Overlay WebSocket initialized at: ws://[ESP32-IP]:%d/ws", WEB_SERVER_PORT);
+            ESP_LOGI(TAG, "Overlay WebSocket initialized at: ws://tank.local:%d/ws", WEB_SERVER_PORT);
         } else {
             ESP_LOGW(TAG, "Failed to initialize overlay WebSocket");
         }
 
         if (ControlInit(server) == 0) {
-            ESP_LOGI(TAG, "Control WebSocket initialized at: ws://[ESP32-IP]:%d/ctrl", WEB_SERVER_PORT);
+            ESP_LOGI(TAG, "Control WebSocket initialized at: ws://tank.local:%d/ctrl", WEB_SERVER_PORT);
         } else {
             ESP_LOGW(TAG, "Failed to initialize control WebSocket");
         }
