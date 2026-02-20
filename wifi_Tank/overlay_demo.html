@@ -152,7 +152,7 @@
 
         <div class="info">
             <p>Enter your ESP32's IP address and click Connect to view the video stream with overlays.</p>
-            <p>WebSocket endpoint: ws://[ESP32-IP]:81/ws | Video stream: http://[ESP32-IP]:81/stream</p>
+            <p>WebSocket endpoint: ws://[ESP32-IP]/ws (port 80) | Video stream: http://[ESP32-IP]:81/stream</p>
         </div>
 
         <div class="error" id="errorMsg"></div>
@@ -196,9 +196,9 @@
                 showError('Failed to load video stream. Check IP address and ensure ESP32 is running.');
             };
 
-            // Connect to WebSocket
+            // Connect to WebSocket (port 80 — main server, independent of stream)
             try {
-                ws = new WebSocket(`ws://${ip}:81/ws`);
+                ws = new WebSocket(`ws://${ip}/ws`);
 
                 ws.onopen = function() {
                     updateStatus(true, 'Connected');

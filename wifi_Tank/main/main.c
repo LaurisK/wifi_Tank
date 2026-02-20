@@ -200,6 +200,15 @@ void app_main(void) {
 
     if (server) {
         ESP_LOGI(TAG, "Web server started on port %d", WEB_SERVER_PORT);
+
+        // Initialize overlay WebSocket on the main server (port 80)
+        // NOTE: Must NOT be on the stream server (port 81) — the stream handler
+        // blocks the httpd task, preventing any WS connections from being processed.
+        if (OverlayInit(server) == 0) {
+            ESP_LOGI(TAG, "Overlay WebSocket initialized at: ws://[ESP32-IP]:%d/ws", WEB_SERVER_PORT);
+        } else {
+            ESP_LOGW(TAG, "Failed to initialize overlay WebSocket");
+        }
     }
 
     // Start application throughput monitoring task

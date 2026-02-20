@@ -115,19 +115,40 @@ static char* overlay_to_json(const overlay_data_t *overlay) {
  */
 static esp_err_t ws_handler(httpd_req_t *req) {
     if (req->method == HTTP_GET) {
-        ESP_LOGI(TAG, "WebSocket handshake initiated");
+        int fd = httpd_req_to_sockfd(req);
+        ESP_LOGI(TAG, "WebSocket client connected: fd=%d", fd);
+
+        // Register client immediately on handshake
+        for (int i = 0; i < MAX_WS_CLIENTS; i++) {
+            if (!overlay_state.clients[i].connected) {
+                overlay_state.clients[i].fd = fd;
+                overlay_state.clients[i].connected = true;
+                overlay_state.client_count++;
+                ESP_LOGI(TAG, "Registered WS client fd=%d (slot %d, total=%d)", fd, i, overlay_state.client_count);
+                break;
+            }
+        }
         return ESP_OK;
     }
 
     // Handle WebSocket frame
     httpd_ws_frame_t ws_pkt;
     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
 
     // First call to get frame length
     esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "httpd_ws_recv_frame failed: %s", esp_err_to_name(ret));
+        int fd = httpd_req_to_sockfd(req);
+        ESP_LOGW(TAG, "ws_recv_frame (header) failed for fd=%d: %s — client likely disconnected", fd, esp_err_to_name(ret));
+        // Mark this client as disconnected
+        for (int i = 0; i < MAX_WS_CLIENTS; i++) {
+            if (overlay_state.clients[i].fd == fd && overlay_state.clients[i].connected) {
+                overlay_state.clients[i].connected = false;
+                overlay_state.client_count--;
+                ESP_LOGI(TAG, "WS client fd=%d disconnected (slot %d, total=%d)", fd, i, overlay_state.client_count);
+                break;
+            }
+        }
         return ret;
     }
 
@@ -144,7 +165,7 @@ static esp_err_t ws_handler(httpd_req_t *req) {
         // Receive the frame payload
         ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
         if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "httpd_ws_recv_frame failed: %s", esp_err_to_name(ret));
+            ESP_LOGW(TAG, "ws_recv_frame (payload) failed: %s", esp_err_to_name(ret));
             free(buf);
             return ret;
         }
@@ -253,14 +274,16 @@ int OverlaySendUpdate(const overlay_data_t *overlay) {
         return -1;
     }
 
+    if (overlay_state.client_count <= 0) {
+        return 0;
+    }
+
     // Convert overlay to JSON
     char *json = overlay_to_json(overlay);
     if (json == NULL) {
         ESP_LOGE(TAG, "Failed to convert overlay to JSON");
         return -1;
     }
-
-    ESP_LOGD(TAG, "Overlay JSON: %s", json);
 
     // Create WebSocket frame
     httpd_ws_frame_t *ws_pkt = calloc(1, sizeof(httpd_ws_frame_t));
@@ -274,48 +297,9 @@ int OverlaySendUpdate(const overlay_data_t *overlay) {
     ws_pkt->len = strlen(json);
     ws_pkt->type = HTTPD_WS_TYPE_TEXT;
 
-    // Update client list by checking all possible file descriptors
-    // This is a simple approach - we'll track clients when they connect
-    httpd_handle_t hd = overlay_state.server;
-    overlay_state.client_count = 0;
+    ESP_LOGI(TAG, "Sending overlay (%d bytes) to %d client(s)", ws_pkt->len, overlay_state.client_count);
 
-    // Scan for WebSocket clients
-    for (int fd = 3; fd < CONFIG_LWIP_MAX_SOCKETS; fd++) {
-        httpd_ws_client_info_t client_info = httpd_ws_get_fd_info(hd, fd);
-        if (client_info == HTTPD_WS_CLIENT_WEBSOCKET) {
-            // Check if this fd is already tracked
-            bool found = false;
-            for (int i = 0; i < MAX_WS_CLIENTS; i++) {
-                if (overlay_state.clients[i].fd == fd) {
-                    found = true;
-                    overlay_state.clients[i].connected = true;
-                    break;
-                }
-            }
-
-            // Add new client
-            if (!found) {
-                for (int i = 0; i < MAX_WS_CLIENTS; i++) {
-                    if (!overlay_state.clients[i].connected) {
-                        overlay_state.clients[i].fd = fd;
-                        overlay_state.clients[i].connected = true;
-                        ESP_LOGI(TAG, "New WebSocket client tracked: fd=%d", fd);
-                        break;
-                    }
-                }
-            }
-            overlay_state.client_count++;
-        }
-    }
-
-    if (overlay_state.client_count == 0) {
-        ESP_LOGW(TAG, "No WebSocket clients connected");
-        free(json);
-        free(ws_pkt);
-        return 0;
-    }
-
-    // Queue async send
+    // Send to all registered clients
     ws_async_send(ws_pkt);
 
     return overlay_state.client_count;
@@ -364,12 +348,19 @@ int OverlayGetClientCount(void) {
         return 0;
     }
 
+    // Validate registered clients are still alive
     httpd_handle_t hd = overlay_state.server;
     int count = 0;
 
-    for (int fd = 3; fd < CONFIG_LWIP_MAX_SOCKETS; fd++) {
-        if (httpd_ws_get_fd_info(hd, fd) == HTTPD_WS_CLIENT_WEBSOCKET) {
-            count++;
+    for (int i = 0; i < MAX_WS_CLIENTS; i++) {
+        if (overlay_state.clients[i].connected) {
+            if (httpd_ws_get_fd_info(hd, overlay_state.clients[i].fd) == HTTPD_WS_CLIENT_WEBSOCKET) {
+                count++;
+            } else {
+                // Client disconnected without triggering ws_handler (e.g., TCP timeout)
+                ESP_LOGI(TAG, "Stale WS client cleaned up: fd=%d (slot %d)", overlay_state.clients[i].fd, i);
+                overlay_state.clients[i].connected = false;
+            }
         }
     }
 
