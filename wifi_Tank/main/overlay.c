@@ -103,6 +103,14 @@ static char* overlay_to_json(const overlay_data_t *overlay) {
     }
     cJSON_AddItemToObject(root, "shapes", shapes_array);
 
+    // Add motor state when provided
+    if (overlay->has_motors) {
+        cJSON *motors = cJSON_CreateObject();
+        cJSON_AddNumberToObject(motors, "L", overlay->motors.l);
+        cJSON_AddNumberToObject(motors, "R", overlay->motors.r);
+        cJSON_AddItemToObject(root, "motors", motors);
+    }
+
     // Convert to string
     char *json_string = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);

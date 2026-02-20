@@ -48,6 +48,12 @@ typedef struct {
     bool fill;       // Fill shape (for rect/circle)
 } overlay_shape_t;
 
+// Motor state for track-bar feedback overlay
+typedef struct {
+    int8_t l;   // -100..100  positive = fwd, negative = rev, 0 = stop
+    int8_t r;
+} overlay_motors_t;
+
 // Complete overlay data structure
 typedef struct {
     uint8_t text_count;
@@ -55,6 +61,9 @@ typedef struct {
 
     uint8_t shape_count;
     overlay_shape_t shapes[OVERLAY_MAX_SHAPES];
+
+    bool             has_motors;   // include motors field in JSON when true
+    overlay_motors_t motors;
 } overlay_data_t;
 
 /**

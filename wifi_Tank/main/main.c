@@ -18,6 +18,8 @@
 #include "esp_netif_net_stack.h"
 #include "provisioning.h"
 #include "mdns.h"
+#include "motor.h"
+#include "control.h"
 
 #define WEB_SERVER_PORT 80
 
@@ -132,37 +134,42 @@ static void throughput_monitor_task(void *pvParameters) {
 static void overlay_demo_task(void *pvParameters) {
     ESP_LOGI(TAG, "Overlay demo task started");
 
-    // Wait a bit for everything to initialize
+    // Wait for everything to initialise
     vTaskDelay(pdMS_TO_TICKS(5000));
 
+    int  last_motor_l  = 0;
+    int  last_motor_r  = 0;
+    TickType_t last_send_tick = xTaskGetTickCount();
     uint32_t counter = 0;
 
     while (1) {
-        // Check if there are WebSocket clients connected
-        int client_count = OverlayGetClientCount();
+        int cur_l, cur_r;
+        ControlGetMotorState(&cur_l, &cur_r);
 
-        if (client_count > 0) {
+        bool motor_changed = (cur_l != last_motor_l || cur_r != last_motor_r);
+        bool heartbeat_due = (xTaskGetTickCount() - last_send_tick) >= pdMS_TO_TICKS(2000);
+
+        if ((motor_changed || heartbeat_due) && OverlayGetClientCount() > 0) {
             overlay_data_t overlay;
             OverlayCreateSampleData(&overlay);
+            snprintf(overlay.texts[1].content, OVERLAY_MAX_TEXT_LENGTH, "FPS: %.1f", StreamGetFps());
 
-            // Update FPS text
-            float fps = StreamGetFps();
-            snprintf(overlay.texts[1].content, OVERLAY_MAX_TEXT_LENGTH, "FPS: %.1f", fps);
+            overlay.has_motors = true;
+            overlay.motors.l   = (int8_t)cur_l;
+            overlay.motors.r   = (int8_t)cur_r;
 
-            // Send overlay update
             int sent = OverlaySendUpdate(&overlay);
             if (sent > 0) {
                 ESP_LOGI(TAG, "Sent overlay update #%lu to %d clients", counter, sent);
+                counter++;
             }
 
-            counter++;
-        } else {
-            // No clients, reset counter
-            counter = 0;
+            last_motor_l   = cur_l;
+            last_motor_r   = cur_r;
+            last_send_tick = xTaskGetTickCount();
         }
 
-        // Send overlay updates every 2 seconds
-        vTaskDelay(pdMS_TO_TICKS(2000));
+        vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
@@ -171,6 +178,15 @@ void app_main(void) {
     TriceInit();
 
     ESP_LOGI(TAG, "Starting wifi_Tank application");
+
+    // Initialise motor drivers (GPIO12-15, BTS7960B EN tied to 5 V)
+    motor_cfg_t motor_cfg = {
+        .left  = { .gpio_rpwm = 13, .gpio_lpwm = 14 },
+        .right = { .gpio_rpwm = 15, .gpio_lpwm = 12 },
+    };
+    if (MotorInit(&motor_cfg) != 0) {
+        ESP_LOGW(TAG, "Motor init failed");
+    }
 
     ESP_ERROR_CHECK(nvs_flash_init());
 
@@ -208,6 +224,12 @@ void app_main(void) {
             ESP_LOGI(TAG, "Overlay WebSocket initialized at: ws://[ESP32-IP]:%d/ws", WEB_SERVER_PORT);
         } else {
             ESP_LOGW(TAG, "Failed to initialize overlay WebSocket");
+        }
+
+        if (ControlInit(server) == 0) {
+            ESP_LOGI(TAG, "Control WebSocket initialized at: ws://[ESP32-IP]:%d/ctrl", WEB_SERVER_PORT);
+        } else {
+            ESP_LOGW(TAG, "Failed to initialize control WebSocket");
         }
     }
 
