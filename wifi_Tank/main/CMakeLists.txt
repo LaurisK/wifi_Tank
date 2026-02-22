@@ -1,4 +1,4 @@
-idf_component_register(SRCS "main.c" "system.c" "stream.c" "overlay.c" "provisioning.c" "motor.c" "control.c" "ota.c"
+idf_component_register(SRCS "main.c" "system.c" "stream.c" "overlay.c" "provisioning.c" "motor.c" "control.c" "ota.c" "params.c"
                     INCLUDE_DIRS "."
                     REQUIRES
                         src

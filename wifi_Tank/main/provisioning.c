@@ -124,6 +124,65 @@ static void nvs_seed_defaults(void) {
     ESP_LOGI(TAG, "Seeded %d default networks to NVS", DEFAULT_NET_COUNT);
 }
 
+static esp_err_t nvs_update_network_pass(int idx, const char *pass) {
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(NVS_CFG_NS, NVS_READWRITE, &h);
+    if (err != ESP_OK) return err;
+    uint8_t count = 0;
+    nvs_get_u8(h, NVS_KEY_NET_COUNT, &count);
+    if (idx < 0 || idx >= (int)count) {
+        nvs_close(h);
+        return ESP_ERR_INVALID_ARG;
+    }
+    char key[16];
+    snprintf(key, sizeof(key), "pass_%d", idx);
+    err = nvs_set_str(h, key, pass);
+    if (err == ESP_OK) err = nvs_commit(h);
+    nvs_close(h);
+    if (err == ESP_OK)
+        ESP_LOGI(TAG, "Updated password for network[%d]", idx);
+    return err;
+}
+
+static esp_err_t nvs_delete_network(int idx) {
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(NVS_CFG_NS, NVS_READWRITE, &h);
+    if (err != ESP_OK) return err;
+    uint8_t count = 0;
+    nvs_get_u8(h, NVS_KEY_NET_COUNT, &count);
+    if (idx < 0 || idx >= (int)count) {
+        nvs_close(h);
+        return ESP_ERR_INVALID_ARG;
+    }
+    /* Shift all networks after idx down by one */
+    char key[16];
+    char ssid[64], pass[64];
+    size_t ssid_sz, pass_sz;
+    for (int i = idx; i < (int)count - 1; i++) {
+        ssid_sz = sizeof(ssid);
+        pass_sz = sizeof(pass);
+        snprintf(key, sizeof(key), "ssid_%d", i + 1);
+        nvs_get_str(h, key, ssid, &ssid_sz);
+        snprintf(key, sizeof(key), "pass_%d", i + 1);
+        nvs_get_str(h, key, pass, &pass_sz);
+        snprintf(key, sizeof(key), "ssid_%d", i);
+        nvs_set_str(h, key, ssid);
+        snprintf(key, sizeof(key), "pass_%d", i);
+        nvs_set_str(h, key, pass);
+    }
+    /* Remove the now-duplicate last entry */
+    snprintf(key, sizeof(key), "ssid_%d", count - 1);
+    nvs_erase_key(h, key);
+    snprintf(key, sizeof(key), "pass_%d", count - 1);
+    nvs_erase_key(h, key);
+    err = nvs_set_u8(h, NVS_KEY_NET_COUNT, count - 1);
+    if (err == ESP_OK) err = nvs_commit(h);
+    nvs_close(h);
+    if (err == ESP_OK)
+        ESP_LOGI(TAG, "Deleted network[%d], new count=%d", idx, count - 1);
+    return err;
+}
+
 // ---------------------------------------------------------------------------
 // URL decode
 // ---------------------------------------------------------------------------
@@ -393,7 +452,36 @@ static int start_sta(void) {
 }
 
 // ---------------------------------------------------------------------------
-// Public API
+// Public network-management API
+// ---------------------------------------------------------------------------
+
+uint8_t ProvisioningGetNetCount(void) {
+    return nvs_get_net_count();
+}
+
+esp_err_t ProvisioningReadNetwork(int idx, char *ssid, size_t ssid_sz,
+                                  char *pass, size_t pass_sz) {
+    return nvs_read_network(idx, ssid, ssid_sz, pass, pass_sz);
+}
+
+esp_err_t ProvisioningAddNetwork(const char *ssid, const char *pass) {
+    return nvs_add_network(ssid, pass);
+}
+
+esp_err_t ProvisioningUpdateNetwork(int idx, const char *pass) {
+    return nvs_update_network_pass(idx, pass);
+}
+
+esp_err_t ProvisioningDeleteNetwork(int idx) {
+    return nvs_delete_network(idx);
+}
+
+int ProvisioningGetCurrentNetIdx(void) {
+    return s_current_net_idx;
+}
+
+// ---------------------------------------------------------------------------
+// Public provisioning entry-point
 // ---------------------------------------------------------------------------
 
 int ProvisioningStart(EventGroupHandle_t *wifi_event_group_out) {

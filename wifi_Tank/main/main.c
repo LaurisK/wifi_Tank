@@ -21,6 +21,7 @@
 #include "motor.h"
 #include "control.h"
 #include "ota.h"
+#include "params.h"
 
 #define WEB_SERVER_PORT 80
 
@@ -227,6 +228,7 @@ void app_main(void) {
         }
 
         OtaInit(server);
+        ParamsInit(server);
     }
 
     // Start application throughput monitoring task

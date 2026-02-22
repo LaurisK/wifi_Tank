@@ -14,7 +14,7 @@
         }
 
         .container {
-            max-width: 1320px;
+            max-width: 1800px;
             margin: 0 auto;
         }
 
@@ -30,7 +30,7 @@
             justify-content: center;
             align-items: center;
             gap: 20px;
-            margin-bottom: 20px;
+            margin-bottom: 16px;
             padding: 10px;
             background-color: #2a2a2a;
             border-radius: 5px;
@@ -55,12 +55,37 @@
         .dot.on  { background-color: #4CAF50; box-shadow: 0 0 8px #4CAF50; }
         .dot.off { background-color: #f44336; }
 
+        /* ── Main layout: params left (30%) + stream right (70%) ── */
+        .main-layout {
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+        }
+
+        /* ── Parameters panel (left column) ── */
+        .params-col {
+            flex: 0 0 30%;
+            min-width: 240px;
+            background: #2a2a2a;
+            border-radius: 8px;
+            padding: 10px 12px;
+            box-sizing: border-box;
+        }
+
+        /* ── Stream column (right) ── */
+        .stream-col {
+            flex: 1 1 70%;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            min-width: 0;
+        }
+
         /* ── Video + canvas ── */
         .video-container {
             position: relative;
-            width: 1280px;
-            height: 720px;
-            margin: 0 auto;
+            width: 100%;
+            aspect-ratio: 16 / 9;
             border: 2px solid #444;
             border-radius: 5px;
             overflow: hidden;
@@ -77,50 +102,17 @@
         #overlayCanvas {
             position: absolute;
             top: 0; left: 0;
-            width: 1280px; height: 720px;
+            width: 100%; height: 100%;
             pointer-events: none;
         }
 
-        /* ── Bottom bar ── */
-        .bottom-bar {
+        /* ── Below-video row: WASD pad ── */
+        .below-video {
             display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-top: 16px;
-            gap: 20px;
-            flex-wrap: wrap;
-        }
-
-        /* ── Connection controls ── */
-        .controls {
-            display: flex;
+            justify-content: flex-end;
             align-items: center;
-            gap: 8px;
-            flex-wrap: wrap;
+            gap: 16px;
         }
-
-        input[type="text"] {
-            padding: 8px 12px;
-            font-size: 14px;
-            border: 1px solid #444;
-            border-radius: 4px;
-            background-color: #2a2a2a;
-            color: #fff;
-            width: 180px;
-        }
-
-        button {
-            padding: 8px 16px;
-            font-size: 14px;
-            border: none;
-            border-radius: 4px;
-            background-color: #4CAF50;
-            color: white;
-            cursor: pointer;
-        }
-
-        button:hover    { background-color: #45a049; }
-        button:disabled { background-color: #555; cursor: not-allowed; }
 
         /* ── WASD pad ── */
         .wasd-pad {
@@ -178,10 +170,110 @@
             display: none;
         }
 
-        .error {
-            color: #f44336;
-            margin-top: 8px;
+        /* ── Parameters panel internals ── */
+
+        /* Section divider + title row */
+        .sec-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+            border-top: 1px solid #3a3a3a;
+            margin: 10px 0 6px 0;
+            padding-top: 8px;
+        }
+        .sec-head:first-child {
+            border-top: none;
+            margin-top: 0;
+            padding-top: 0;
+        }
+        .sec-title {
+            color: #4CAF50;
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .params-row {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-bottom: 5px;
+        }
+
+        .params-msg {
+            min-height: 14px;
+            font-size: 11px;
+            margin: 2px 0 4px 0;
+            color: #888;
+        }
+
+        .params-select {
+            flex: 1;
+            min-width: 0;
+            padding: 5px 7px;
+            background: #1a1a1a;
+            color: #fff;
+            border: 1px solid #444;
+            border-radius: 4px;
             font-size: 13px;
+        }
+
+        .params-input {
+            flex: 1;
+            min-width: 0;
+            padding: 5px 8px;
+            font-size: 13px;
+            border: 1px solid #444;
+            border-radius: 4px;
+            background-color: #1a1a1a;
+            color: #fff;
+        }
+
+        button {
+            padding: 5px 11px;
+            font-size: 13px;
+            border: none;
+            border-radius: 4px;
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+            white-space: nowrap;
+        }
+
+        button:hover    { background-color: #45a049; }
+        button:disabled { background-color: #555; cursor: not-allowed; }
+
+        .btn-icon {
+            padding: 5px 8px;
+            background-color: #333;
+            font-size: 13px;
+        }
+        .btn-icon:hover { background-color: #444; }
+
+        .btn-danger {
+            background-color: #c0392b;
+        }
+        .btn-danger:hover  { background-color: #a93226; }
+
+        .rot-btn {
+            padding: 4px 9px;
+            font-size: 12px;
+            background: #333;
+        }
+        .rot-btn:hover            { background: #444; }
+        .rot-btn.active-rot       { background: #4CAF50; }
+        .rot-btn.active-rot:hover { background: #45a049; }
+
+        .cam-check-label {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            color: #ccc;
+            white-space: nowrap;
         }
     </style>
 </head>
@@ -201,43 +293,117 @@
             </div>
         </div>
 
-        <div class="video-container">
-            <img id="videoStream" alt="Video Stream" />
-            <canvas id="overlayCanvas" width="1280" height="720"></canvas>
-        </div>
+        <div class="main-layout">
 
-        <div class="bottom-bar">
-            <div>
-                <div class="controls">
-                    <input type="text" id="espIp" placeholder="ESP32 IP" value="192.168.1.100" />
-                    <button id="connectBtn"    onclick="connect()">Connect</button>
-                    <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
-                </div>
-                <div class="error" id="errorMsg"></div>
-            </div>
+            <!-- ── Parameters panel (left 30%) ── -->
+            <div class="params-col">
 
-            <div>
-                <div class="wasd-pad">
-                    <div class="wasd-row">
-                        <div class="wasd-key spacer"></div>
-                        <div class="wasd-key" id="key-w">W</div>
-                        <div class="wasd-key spacer"></div>
+                <!-- WiFi Networks -->
+                <div class="sec-head">
+                    <span class="sec-title">WiFi Networks</span>
+                    <button class="btn-icon" onclick="loadNetworks()" title="Reload from device">↺</button>
+                </div>
+
+                <div class="params-row">
+                    <select id="netSelect" class="params-select" onchange="onNetSelectChange()">
+                        <option value="new">+ New network</option>
+                    </select>
+                </div>
+
+                <div class="params-row" id="newSsidRow" style="display:none;">
+                    <input type="text" id="newSsid" class="params-input" placeholder="SSID" />
+                </div>
+
+                <div class="params-row">
+                    <input type="password" id="netPass" class="params-input" placeholder="Password" />
+                    <button class="btn-icon" id="showPassBtn" onclick="togglePassVisibility()" title="Show/hide password">👁</button>
+                    <button class="btn-danger btn-icon" id="deleteNetBtn" onclick="deleteNetwork()" disabled title="Delete network">✕</button>
+                    <button id="saveNetBtn" onclick="saveNetwork()">Add</button>
+                </div>
+
+                <div class="params-msg" id="netMsg"></div>
+
+                <!-- Camera -->
+                <div class="sec-head">
+                    <span class="sec-title">Camera</span>
+                </div>
+
+                <div class="params-row">
+                    <button class="rot-btn active-rot" id="rot0"   onclick="setRotation(0)">0°</button>
+                    <button class="rot-btn"            id="rot90"  onclick="setRotation(90)">90°</button>
+                    <button class="rot-btn"            id="rot180" onclick="setRotation(180)">180°</button>
+                    <button class="rot-btn"            id="rot270" onclick="setRotation(270)">270°</button>
+                    <span style="flex:1"></span>
+                    <label class="cam-check-label"><input type="checkbox" id="hMirrorChk" onchange="applyVideoTransform()"> ↔H</label>
+                    <label class="cam-check-label"><input type="checkbox" id="vMirrorChk" onchange="applyVideoTransform()"> ↕V</label>
+                </div>
+
+                <!-- Firmware OTA -->
+                <div class="sec-head">
+                    <span class="sec-title">Firmware</span>
+                    <span id="fwVersion" style="font-size:10px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60%;">—</span>
+                </div>
+
+                <div class="params-row">
+                    <input type="file" id="otaFile" accept=".bin" class="params-input"
+                           style="padding:3px 5px;font-size:12px;" onchange="onOtaFileChange()" />
+                    <button id="otaUploadBtn" onclick="startOta()" disabled>Upload</button>
+                </div>
+
+                <div id="otaProgress" style="display:none;margin-bottom:4px;">
+                    <div style="background:#1a1a1a;border-radius:4px;height:10px;overflow:hidden;margin-bottom:4px;">
+                        <div id="otaBar" style="height:100%;width:0%;background:#4CAF50;transition:width 0.15s;"></div>
                     </div>
-                    <div class="wasd-row">
-                        <div class="wasd-key" id="key-a">A</div>
-                        <div class="wasd-key" id="key-s">S</div>
-                        <div class="wasd-key" id="key-d">D</div>
+                    <div style="display:flex;justify-content:space-between;font-size:11px;color:#999;">
+                        <span id="otaPct">0%</span>
+                        <span id="otaSpeed">—</span>
+                        <span id="otaEta">—</span>
                     </div>
                 </div>
-                <div class="wasd-label">
-                    keyboard control
-                    <span id="slowBadge">⅓ SPEED</span>
+
+                <div class="params-msg" id="otaMsg"></div>
+
+            </div><!-- /params-col -->
+
+            <!-- ── Stream column (right 70%) ── -->
+            <div class="stream-col">
+
+                <div class="video-container">
+                    <img id="videoStream" alt="Video Stream" />
+                    <canvas id="overlayCanvas" width="1280" height="720"></canvas>
                 </div>
-            </div>
-        </div>
+
+                <div class="below-video">
+                    <div>
+                        <div class="wasd-pad">
+                            <div class="wasd-row">
+                                <div class="wasd-key spacer"></div>
+                                <div class="wasd-key" id="key-w">W</div>
+                                <div class="wasd-key spacer"></div>
+                            </div>
+                            <div class="wasd-row">
+                                <div class="wasd-key" id="key-a">A</div>
+                                <div class="wasd-key" id="key-s">S</div>
+                                <div class="wasd-key" id="key-d">D</div>
+                            </div>
+                        </div>
+                        <div class="wasd-label">
+                            keyboard control
+                            <span id="slowBadge">⅓ SPEED</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div><!-- /stream-col -->
+
+        </div><!-- /main-layout -->
+
     </div>
 
     <script>
+        // ── Host ───────────────────────────────────────────────────────────
+        const ESP_HOST = 'tank.local';
+
         // ── State ──────────────────────────────────────────────────────────
         let ws   = null;
         let ctrl = null;
@@ -263,29 +429,17 @@
         window.onload = function () {
             canvas = document.getElementById('overlayCanvas');
             ctx    = canvas.getContext('2d');
-
-            const urlParams = new URLSearchParams(window.location.search);
-            const ip = urlParams.get('ip');
-            if (ip) {
-                document.getElementById('espIp').value = ip;
-                connect();
-            } else if (window.location.hostname && window.location.protocol !== 'file:') {
-                document.getElementById('espIp').value = window.location.hostname;
-                connect();
-            }
+            connect();
+            loadNetworks();
+            loadVersion();
         };
 
         // ── Connection ─────────────────────────────────────────────────────
         function connect() {
-            const ip = document.getElementById('espIp').value.trim();
-            if (!ip) { showError('Please enter ESP32 IP address'); return; }
-            showError('');
-
             const video = document.getElementById('videoStream');
-            video.src = `http://${ip}:81/stream`;
-            video.onerror = () => showError('Video stream failed — check IP and ESP32.');
+            video.src = `http://${ESP_HOST}:81/stream`;
 
-            ws = new WebSocket(`ws://${ip}/ws`);
+            ws = new WebSocket(`ws://${ESP_HOST}/ws`);
             ws.onopen  = () => setDot('dotOverlay', true);
             ws.onclose = () => setDot('dotOverlay', false);
             ws.onerror = (e) => console.error('overlay ws error', e);
@@ -307,36 +461,15 @@
                 }
             };
 
-            ctrl = new WebSocket(`ws://${ip}/ctrl`);
+            ctrl = new WebSocket(`ws://${ESP_HOST}/ctrl`);
             ctrl.onopen  = () => setDot('dotCtrl', true);
             ctrl.onclose = () => {
                 setDot('dotCtrl', false);
                 pressedKeys.clear();
                 WASD_KEYS.forEach(k => highlight(k, false));
-                computeAndSend();   // sends {L:0,R:0} if still open (no-op if closed)
+                computeAndSend();
             };
             ctrl.onerror = (e) => console.error('ctrl ws error', e);
-
-            document.getElementById('connectBtn').disabled    = true;
-            document.getElementById('disconnectBtn').disabled = false;
-        }
-
-        function disconnect() {
-            if (ws)   { ws.close();   ws   = null; }
-            if (ctrl) { ctrl.close(); ctrl = null; }
-            document.getElementById('videoStream').src = '';
-            lastOverlayData = null;
-            updateCount = 0;
-            document.getElementById('updateCount').textContent = '0';
-            pressedKeys.clear();
-            WASD_KEYS.forEach(k => highlight(k, false));
-            slowMode = false;
-            updateSlowBadge();
-            lastL = lastR = null;
-            motorState.left = motorState.right = { dir: 'stop', percent: 0 };
-            render();
-            document.getElementById('connectBtn').disabled    = false;
-            document.getElementById('disconnectBtn').disabled = true;
         }
 
         // ── WASD key handling ──────────────────────────────────────────────
@@ -345,7 +478,6 @@
         document.addEventListener('keydown', function (e) {
             if (e.repeat) return;
 
-            // Shift key alone: recompute speed if WASD is held
             if (e.key === 'Shift') {
                 slowMode = true;
                 updateSlowBadge();
@@ -353,14 +485,12 @@
                 return;
             }
 
-            // CapsLock: state available reliably on keyup (see below)
             if (e.key === 'CapsLock') return;
 
             const key = e.key.toLowerCase();
             if (!WASD_KEYS.includes(key)) return;
             e.preventDefault();
 
-            // Update slow mode from current modifiers
             slowMode = e.shiftKey || e.getModifierState('CapsLock');
             updateSlowBadge();
 
@@ -377,7 +507,6 @@
                 return;
             }
 
-            // CapsLock: read the new (post-toggle) state on keyup
             if (e.key === 'CapsLock') {
                 slowMode = e.getModifierState('CapsLock');
                 updateSlowBadge();
@@ -397,21 +526,6 @@
         });
 
         // ── Motor value computation ────────────────────────────────────────
-        //
-        // Key combination → L, R (base, no multiplier)
-        //
-        //  W       →  100,  100   straight forward
-        //  S       → -100, -100   straight reverse
-        //  A       →  -50,   50   pivot left
-        //  D       →   50,  -50   pivot right
-        //  W+D     →  100,    0   arc right (left track only)
-        //  W+A     →    0,  100   arc left  (right track only)
-        //  S+D     → -100,    0   reverse arc right
-        //  S+A     →    0, -100   reverse arc left
-        //  W+S / A+D → cancel → 0, 0
-        //
-        //  Shift / CapsLock → multiply all by 1/3
-
         function computeMotorValues() {
             const w = pressedKeys.has('w');
             const s = pressedKeys.has('s');
@@ -444,12 +558,10 @@
         function computeAndSend() {
             const { L, R } = computeMotorValues();
 
-            // Skip if nothing changed
             if (L === lastL && R === lastR) return;
             lastL = L;
             lastR = R;
 
-            // Send to ESP32
             if (ctrl && ctrl.readyState === WebSocket.OPEN) {
                 ctrl.send(JSON.stringify({ L, R }));
             }
@@ -471,7 +583,7 @@
         // ── Track power bars (top-right corner of canvas) ──────────────────
         function drawTrackBars() {
             const BAR_W  = 22;
-            const BAR_H  = 60;   // half-height; fill grows up (fwd) or down (rev)
+            const BAR_H  = 60;
             const GAP    = 18;
             const PAD    = 10;
             const MARGIN =  8;
@@ -494,11 +606,9 @@
         }
 
         function drawSingleBar(x, yC, w, h, state, label) {
-            // Trough
             ctx.fillStyle = '#2a2a2a';
             ctx.fillRect(x, yC - h, w, h * 2);
 
-            // Fill
             const fillH = Math.round(h * state.percent / 100);
             if (state.dir === 'fwd' && fillH > 0) {
                 ctx.fillStyle = '#4CAF50';
@@ -508,11 +618,9 @@
                 ctx.fillRect(x, yC, w, fillH);
             }
 
-            // Centre divider
             ctx.fillStyle = '#666';
             ctx.fillRect(x, yC - 1, w, 2);
 
-            // Direction arrow
             if (state.dir !== 'stop') {
                 ctx.fillStyle = 'rgba(255,255,255,0.85)';
                 ctx.font = 'bold 13px Arial';
@@ -523,7 +631,6 @@
                 ctx.fillText(state.dir === 'fwd' ? '▲' : '▼', x + w / 2, arrowY);
             }
 
-            // Track label
             ctx.fillStyle = '#aaa';
             ctx.font = 'bold 11px Arial';
             ctx.textAlign = 'center';
@@ -584,7 +691,6 @@
 
         function updateSlowBadge() {
             document.getElementById('slowBadge').style.display = slowMode ? 'inline' : 'none';
-            // Re-colour any currently pressed keys
             pressedKeys.forEach(k => highlight(k, true));
         }
 
@@ -592,10 +698,6 @@
             const el = document.getElementById(id);
             el.classList.toggle('on',  on);
             el.classList.toggle('off', !on);
-        }
-
-        function showError(msg) {
-            document.getElementById('errorMsg').textContent = msg;
         }
 
         function roundRect(c, x, y, w, h, r) {
@@ -616,9 +718,257 @@
             }
         }
 
-        document.getElementById('espIp').addEventListener('keypress', function (e) {
-            if (e.key === 'Enter') connect();
-        });
+        // ── Camera transform ────────────────────────────────────────────────
+        let camRotation = 0;
+
+        function setRotation(deg) {
+            camRotation = deg;
+            ['rot0', 'rot90', 'rot180', 'rot270'].forEach(function (id) {
+                document.getElementById(id).classList.toggle(
+                    'active-rot', id === 'rot' + deg
+                );
+            });
+            applyVideoTransform();
+        }
+
+        function applyVideoTransform() {
+            const hm = document.getElementById('hMirrorChk').checked;
+            const vm = document.getElementById('vMirrorChk').checked;
+            const parts = [];
+            if (camRotation)  parts.push('rotate(' + camRotation + 'deg)');
+            if (hm)           parts.push('scaleX(-1)');
+            if (vm)           parts.push('scaleY(-1)');
+            document.getElementById('videoStream').style.transform =
+                parts.length ? parts.join(' ') : '';
+        }
+
+        // ── Parameters: WiFi Networks ────────────────────────────────────────
+        let networks    = [];
+        let currentNet  = -1;
+
+        function loadNetworks() {
+            setNetMsg('Loading…', '#888');
+            fetch('http://' + ESP_HOST + '/params/networks')
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    networks   = data.networks || [];
+                    currentNet = typeof data.current === 'number' ? data.current : -1;
+                    populateNetSelect();
+                    setNetMsg('', '');
+                })
+                .catch(function (err) {
+                    setNetMsg('Load failed: ' + err, '#f44336');
+                });
+        }
+
+        function populateNetSelect() {
+            var sel = document.getElementById('netSelect');
+            var prev = sel.value;
+            sel.innerHTML = '<option value="new">+ New network</option>';
+            networks.forEach(function (net, i) {
+                var opt = document.createElement('option');
+                opt.value = i;
+                var marker = (i === currentNet) ? '★ ' : '';
+                opt.textContent = marker + net.ssid +
+                    (i === currentNet ? '  (connected)' : '');
+                sel.appendChild(opt);
+            });
+            var prevStillValid = Array.from(sel.options).some(function (o) {
+                return o.value === prev;
+            });
+            sel.value = prevStillValid ? prev : 'new';
+            onNetSelectChange();
+        }
+
+        function onNetSelectChange() {
+            var sel   = document.getElementById('netSelect');
+            var isNew = sel.value === 'new';
+            var idx   = isNew ? -1 : parseInt(sel.value);
+
+            document.getElementById('newSsidRow').style.display = isNew ? 'flex' : 'none';
+            document.getElementById('newSsid').value = '';
+            document.getElementById('netPass').value  = (!isNew && networks[idx])
+                ? networks[idx].pass : '';
+            document.getElementById('deleteNetBtn').disabled = isNew;
+            document.getElementById('saveNetBtn').textContent = isNew ? 'Add' : 'Update';
+            document.getElementById('netPass').type = 'password';
+        }
+
+        function togglePassVisibility() {
+            var pass = document.getElementById('netPass');
+            pass.type = pass.type === 'password' ? 'text' : 'password';
+        }
+
+        function saveNetwork() {
+            var sel   = document.getElementById('netSelect');
+            var isNew = sel.value === 'new';
+            var pass  = document.getElementById('netPass').value;
+
+            var url, body;
+            if (isNew) {
+                var ssid = document.getElementById('newSsid').value.trim();
+                if (!ssid) { setNetMsg('SSID is required.', '#f44336'); return; }
+                url  = 'http://' + ESP_HOST + '/params/networks/add';
+                body = 'ssid=' + encodeURIComponent(ssid) +
+                       '&pass=' + encodeURIComponent(pass);
+            } else {
+                var idx = parseInt(sel.value);
+                url  = 'http://' + ESP_HOST + '/params/networks/update';
+                body = 'idx=' + idx + '&pass=' + encodeURIComponent(pass);
+            }
+
+            setNetMsg('Saving…', '#888');
+            fetch(url, { method: 'POST', body: body })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.ok) {
+                        setNetMsg('Saved!', '#4CAF50');
+                        loadNetworks();
+                    } else {
+                        setNetMsg('Save error.', '#f44336');
+                    }
+                })
+                .catch(function (err) {
+                    setNetMsg('Request failed: ' + err, '#f44336');
+                });
+        }
+
+        function deleteNetwork() {
+            var idx = parseInt(document.getElementById('netSelect').value);
+            if (isNaN(idx)) return;
+
+            var name = (networks[idx] && networks[idx].ssid) ? networks[idx].ssid : '(#' + idx + ')';
+            if (!confirm('Delete network "' + name + '"?')) return;
+
+            setNetMsg('Deleting…', '#888');
+            fetch('http://' + ESP_HOST + '/params/networks/delete', {
+                method: 'POST',
+                body:   'idx=' + idx,
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (data.ok) {
+                        setNetMsg('Deleted.', '#4CAF50');
+                        loadNetworks();
+                    } else {
+                        setNetMsg('Delete error.', '#f44336');
+                    }
+                })
+                .catch(function (err) {
+                    setNetMsg('Request failed: ' + err, '#f44336');
+                });
+        }
+
+        function setNetMsg(msg, color) {
+            var el = document.getElementById('netMsg');
+            el.textContent  = msg;
+            el.style.color  = color || '#888';
+        }
+
+        // ── Firmware OTA ─────────────────────────────────────────────────────
+        function loadVersion() {
+            fetch('http://' + ESP_HOST + '/version')
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    document.getElementById('fwVersion').textContent =
+                        d.version + ' · ' + d.date + ' ' + d.time + ' [' + d.partition + ']';
+                })
+                .catch(function () {
+                    document.getElementById('fwVersion').textContent = 'unavailable';
+                });
+        }
+
+        function onOtaFileChange() {
+            const hasFile = document.getElementById('otaFile').files.length > 0;
+            document.getElementById('otaUploadBtn').disabled = !hasFile;
+            // Reset progress bar if a new file is chosen
+            document.getElementById('otaProgress').style.display = 'none';
+            document.getElementById('otaBar').style.width = '0%';
+            document.getElementById('otaBar').style.background = '#4CAF50';
+            document.getElementById('otaPct').textContent = '0%';
+            document.getElementById('otaSpeed').textContent = '—';
+            document.getElementById('otaEta').textContent = '—';
+            setOtaMsg('', '');
+        }
+
+        function startOta() {
+            const file = document.getElementById('otaFile').files[0];
+            if (!file) return;
+
+            const btn      = document.getElementById('otaUploadBtn');
+            const bar      = document.getElementById('otaBar');
+            const pctEl    = document.getElementById('otaPct');
+            const speedEl  = document.getElementById('otaSpeed');
+            const etaEl    = document.getElementById('otaEta');
+            const progress = document.getElementById('otaProgress');
+
+            btn.disabled = true;
+            bar.style.background = '#4CAF50';
+            bar.style.width = '0%';
+            progress.style.display = 'block';
+            setOtaMsg('Uploading ' + (file.size / 1024).toFixed(0) + ' KB…', '#888');
+
+            const startTime = Date.now();
+
+            const xhr = new XMLHttpRequest();
+
+            xhr.upload.onprogress = function (e) {
+                if (!e.lengthComputable) return;
+                const pct     = e.loaded / e.total * 100;
+                const elapsed = (Date.now() - startTime) / 1000;
+                const speed   = elapsed > 0 ? e.loaded / elapsed : 0;      // bytes/s
+                const eta     = speed > 0 ? (e.total - e.loaded) / speed : Infinity;
+
+                bar.style.width    = pct.toFixed(1) + '%';
+                pctEl.textContent  = pct.toFixed(1) + '%';
+                speedEl.textContent = formatSpeed(speed);
+                etaEl.textContent  = 'ETA ' + formatEta(eta);
+            };
+
+            xhr.onload = function () {
+                btn.disabled = false;
+                if (xhr.status === 200) {
+                    bar.style.width = '100%';
+                    pctEl.textContent  = '100%';
+                    speedEl.textContent = '';
+                    etaEl.textContent  = '';
+                    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                    const avg = formatSpeed(file.size / (elapsed || 1));
+                    setOtaMsg('Done in ' + elapsed + 's (avg ' + avg + ') — device rebooting…', '#4CAF50');
+                } else {
+                    bar.style.background = '#f44336';
+                    setOtaMsg('Failed (HTTP ' + xhr.status + '): ' + xhr.responseText, '#f44336');
+                }
+            };
+
+            xhr.onerror = function () {
+                btn.disabled = false;
+                bar.style.background = '#f44336';
+                setOtaMsg('Network error during upload.', '#f44336');
+            };
+
+            xhr.open('POST', 'http://' + ESP_HOST + '/ota');
+            xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+            xhr.send(file);
+        }
+
+        function formatSpeed(bps) {
+            if (bps >= 1024 * 1024) return (bps / 1024 / 1024).toFixed(2) + ' MB/s';
+            if (bps >= 1024)        return (bps / 1024).toFixed(1) + ' KB/s';
+            return bps.toFixed(0) + ' B/s';
+        }
+
+        function formatEta(sec) {
+            if (!isFinite(sec) || sec < 0) return '…';
+            if (sec < 60) return Math.ceil(sec) + 's';
+            return Math.floor(sec / 60) + 'm ' + Math.ceil(sec % 60) + 's';
+        }
+
+        function setOtaMsg(msg, color) {
+            var el = document.getElementById('otaMsg');
+            el.textContent = msg;
+            el.style.color = color || '#888';
+        }
     </script>
 </body>
 </html>
