@@ -1,5 +1,6 @@
 #include "params.h"
 #include "provisioning.h"
+#include "control.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -220,6 +221,45 @@ static esp_err_t handle_delete_network(httpd_req_t *req) {
 }
 
 // ---------------------------------------------------------------------------
+// GET /params/ctrl   → {"ramp_rate": N}
+// ---------------------------------------------------------------------------
+
+static esp_err_t handle_get_ctrl(httpd_req_t *req) {
+    httpd_resp_set_type(req, "application/json");
+    set_cors(req);
+
+    char buf[32];
+    snprintf(buf, sizeof(buf), "{\"ramp_rate\":%d}", ControlGetRampRate());
+    httpd_resp_send(req, buf, (ssize_t)strlen(buf));
+    return ESP_OK;
+}
+
+// ---------------------------------------------------------------------------
+// POST /params/ctrl   body: ramp_rate=N
+// ---------------------------------------------------------------------------
+
+static esp_err_t handle_post_ctrl(httpd_req_t *req) {
+    httpd_resp_set_type(req, "application/json");
+    set_cors(req);
+
+    char body[64];
+    if (recv_body(req, body, sizeof(body)) != ESP_OK) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Empty body");
+        return ESP_FAIL;
+    }
+
+    int rate = parse_int_field(body, "ramp_rate", -1);
+    if (rate < 1 || rate > 500) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "ramp_rate must be 1-500");
+        return ESP_FAIL;
+    }
+
+    ControlSetRampRate(rate);
+    httpd_resp_send(req, "{\"ok\":true}", HTTPD_RESP_USE_STRLEN);
+    return ESP_OK;
+}
+
+// ---------------------------------------------------------------------------
 // Registration
 // ---------------------------------------------------------------------------
 
@@ -243,12 +283,24 @@ static const httpd_uri_t uri_delete_network = {
     .method  = HTTP_POST,
     .handler = handle_delete_network,
 };
+static const httpd_uri_t uri_get_ctrl = {
+    .uri     = "/params/ctrl",
+    .method  = HTTP_GET,
+    .handler = handle_get_ctrl,
+};
+static const httpd_uri_t uri_post_ctrl = {
+    .uri     = "/params/ctrl",
+    .method  = HTTP_POST,
+    .handler = handle_post_ctrl,
+};
 
 esp_err_t ParamsInit(httpd_handle_t server) {
     httpd_register_uri_handler(server, &uri_get_networks);
     httpd_register_uri_handler(server, &uri_add_network);
     httpd_register_uri_handler(server, &uri_update_network);
     httpd_register_uri_handler(server, &uri_delete_network);
+    httpd_register_uri_handler(server, &uri_get_ctrl);
+    httpd_register_uri_handler(server, &uri_post_ctrl);
     ESP_LOGI(TAG, "Params endpoints registered");
     return ESP_OK;
 }

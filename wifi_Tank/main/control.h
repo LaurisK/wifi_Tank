@@ -26,11 +26,20 @@ extern "C" {
 int ControlInit(httpd_handle_t server);
 
 /**
- * Return the last motor values applied by the control WebSocket.
+ * Return the current (post-ramp) motor values being applied.
  * Values are -100..100 (positive = forward, negative = reverse, 0 = stopped).
  * Safe to call from any task.
  */
 void ControlGetMotorState(int *l, int *r);
+
+/**
+ * Set the ramp rate in %/s (1–500).  Persisted in NVS immediately.
+ * The ramp task uses this value on the next tick.
+ */
+void ControlSetRampRate(int percent_per_sec);
+
+/** Return the active ramp rate in %/s. */
+int  ControlGetRampRate(void);
 
 #ifdef __cplusplus
 }

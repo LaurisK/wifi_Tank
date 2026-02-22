@@ -338,6 +338,22 @@
                     <label class="cam-check-label"><input type="checkbox" id="vMirrorChk" onchange="applyVideoTransform()"> ↕V</label>
                 </div>
 
+                <!-- Controls -->
+                <div class="sec-head">
+                    <span class="sec-title">Controls</span>
+                </div>
+
+                <div class="params-row">
+                    <span style="font-size:12px;color:#999;white-space:nowrap;">Ramp rate</span>
+                    <input type="number" id="rampRate" class="params-input"
+                           min="1" max="500" placeholder="50"
+                           style="max-width:70px;"
+                           onkeydown="onRampKeydown(event)" />
+                    <span style="font-size:12px;color:#888;">%/s</span>
+                </div>
+
+                <div class="params-msg" id="rampMsg"></div>
+
                 <!-- Firmware OTA -->
                 <div class="sec-head">
                     <span class="sec-title">Firmware</span>
@@ -431,6 +447,7 @@
             ctx    = canvas.getContext('2d');
             connect();
             loadNetworks();
+            loadCtrlParams();
             loadVersion();
         };
 
@@ -863,6 +880,44 @@
             var el = document.getElementById('netMsg');
             el.textContent  = msg;
             el.style.color  = color || '#888';
+        }
+
+        // ── Control parameters ────────────────────────────────────────────────
+        function loadCtrlParams() {
+            fetch('http://' + ESP_HOST + '/params/ctrl')
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    document.getElementById('rampRate').value = d.ramp_rate;
+                })
+                .catch(function () {});
+        }
+
+        function onRampKeydown(e) {
+            if (e.key === 'Enter') saveRampRate();
+        }
+
+        function saveRampRate() {
+            var rate = parseInt(document.getElementById('rampRate').value, 10);
+            if (isNaN(rate) || rate < 1 || rate > 500) {
+                setRampMsg('Enter 1–500', '#f44336');
+                return;
+            }
+            setRampMsg('Saving…', '#888');
+            fetch('http://' + ESP_HOST + '/params/ctrl', {
+                method: 'POST',
+                body:   'ramp_rate=' + rate,
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    setRampMsg(d.ok ? 'Saved' : 'Error', d.ok ? '#4CAF50' : '#f44336');
+                })
+                .catch(function (err) { setRampMsg('Error: ' + err, '#f44336'); });
+        }
+
+        function setRampMsg(msg, color) {
+            var el = document.getElementById('rampMsg');
+            el.textContent = msg;
+            el.style.color = color || '#888';
         }
 
         // ── Firmware OTA ─────────────────────────────────────────────────────
