@@ -17,7 +17,13 @@ static void reboot_after_ota(void *arg) {
     vTaskDelete(NULL);
 }
 
+static void set_cors(httpd_req_t *req) {
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+}
+
 static esp_err_t ota_post_handler(httpd_req_t *req) {
+    set_cors(req);
+
     const esp_partition_t *update_partition = esp_ota_get_next_update_partition(NULL);
     if (!update_partition) {
         ESP_LOGE(TAG, "No OTA update partition found");
@@ -96,6 +102,7 @@ static esp_err_t ota_post_handler(httpd_req_t *req) {
 }
 
 static esp_err_t version_get_handler(httpd_req_t *req) {
+    set_cors(req);
     const esp_app_desc_t *desc = esp_app_get_description();
     const esp_partition_t *running = esp_ota_get_running_partition();
 

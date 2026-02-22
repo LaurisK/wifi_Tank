@@ -61,16 +61,38 @@ static const httpd_uri_t root = {
     .user_ctx = NULL
 };
 
+// Wildcard CORS preflight handler — responds to OPTIONS /* so browsers can send
+// cross-origin requests (including Chrome's Private Network Access preflight).
+static esp_err_t cors_preflight_handler(httpd_req_t *req) {
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin",          "*");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Methods",         "GET, POST, OPTIONS");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Headers",         "Content-Type");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Private-Network", "true");
+    httpd_resp_set_hdr(req, "Access-Control-Max-Age",               "86400");
+    httpd_resp_set_status(req, "204 No Content");
+    httpd_resp_send(req, NULL, 0);
+    return ESP_OK;
+}
+
+static const httpd_uri_t uri_cors_preflight = {
+    .uri     = "/*",
+    .method  = HTTP_OPTIONS,
+    .handler = cors_preflight_handler,
+};
+
 static httpd_handle_t start_webserver(void) {
     httpd_handle_t server = NULL;
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-    config.server_port = WEB_SERVER_PORT;
+    config.server_port      = WEB_SERVER_PORT;
     config.lru_purge_enable = true;
-    config.stack_size = 8192;  // Increased for OTA upload handler
+    config.stack_size       = 8192;
+    config.max_uri_handlers = 20;               // default 8 is too small
+    config.uri_match_fn     = httpd_uri_match_wildcard; // needed for OPTIONS /*
 
     if (httpd_start(&server, &config) == ESP_OK) {
         ESP_LOGI(TAG, "Registering URI handlers");
         httpd_register_uri_handler(server, &root);
+        httpd_register_uri_handler(server, &uri_cors_preflight);
         return server;
     }
 
