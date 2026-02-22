@@ -111,6 +111,22 @@ static char* overlay_to_json(const overlay_data_t *overlay) {
         cJSON_AddItemToObject(root, "motors", motors);
     }
 
+    // Add telemetry when provided
+    if (overlay->has_telemetry) {
+        cJSON *tel = cJSON_CreateObject();
+        cJSON_AddNumberToObject(tel, "fps",          overlay->telemetry.fps);
+        cJSON_AddNumberToObject(tel, "rssi",         overlay->telemetry.rssi);
+        cJSON_AddNumberToObject(tel, "wifi_channel", overlay->telemetry.wifi_channel);
+        cJSON_AddNumberToObject(tel, "tx_kbps",      overlay->telemetry.tx_kbps);
+        cJSON_AddNumberToObject(tel, "rx_kbps",      overlay->telemetry.rx_kbps);
+        cJSON_AddNumberToObject(tel, "int_heap_kb",  overlay->telemetry.int_heap_kb);
+        cJSON_AddNumberToObject(tel, "mcu_temp_c",   overlay->telemetry.mcu_temp_c);
+        cJSON_AddNumberToObject(tel, "uptime_s",     overlay->telemetry.uptime_s);
+        cJSON_AddNumberToObject(tel, "cam_aec",      overlay->telemetry.cam_aec);
+        cJSON_AddNumberToObject(tel, "cam_gain",     overlay->telemetry.cam_gain);
+        cJSON_AddItemToObject(root, "telemetry", tel);
+    }
+
     // Convert to string
     char *json_string = cJSON_PrintUnformatted(root);
     cJSON_Delete(root);
@@ -320,31 +336,17 @@ void OverlayCreateSampleData(overlay_data_t *overlay) {
 
     memset(overlay, 0, sizeof(overlay_data_t));
 
-    // Add sample text overlays
-    overlay->text_count = 2;
+    // No text items — telemetry HUD panel on the client side covers all status.
+    overlay->text_count = 0;
 
-    snprintf(overlay->texts[0].content, OVERLAY_MAX_TEXT_LENGTH, "ESP32 WiFi Tank");
-    overlay->texts[0].x = 10;
-    overlay->texts[0].y = 30;
-    strncpy(overlay->texts[0].color, "white", OVERLAY_MAX_COLOR_LENGTH);
-    overlay->texts[0].size = 20;
-
-    // FPS text placeholder (updated dynamically in overlay_demo_task)
-    snprintf(overlay->texts[1].content, OVERLAY_MAX_TEXT_LENGTH, "FPS: --");
-    overlay->texts[1].x = 10;
-    overlay->texts[1].y = 60;
-    strncpy(overlay->texts[1].color, "lime", OVERLAY_MAX_COLOR_LENGTH);
-    overlay->texts[1].size = 16;
-
-    // Add triangle shape
+    // Triangle reticle in the centre of the frame
     overlay->shape_count = 1;
-
     overlay->shapes[0].type = OVERLAY_SHAPE_TRIANGLE;
-    overlay->shapes[0].x1 = 640;   // Top vertex (center, 30% from top)
+    overlay->shapes[0].x1 = 640;
     overlay->shapes[0].y1 = 216;
-    overlay->shapes[0].x2 = 576;   // Bottom-left (70% from top)
+    overlay->shapes[0].x2 = 576;
     overlay->shapes[0].y2 = 504;
-    overlay->shapes[0].x3 = 704;   // Bottom-right (70% from top)
+    overlay->shapes[0].x3 = 704;
     overlay->shapes[0].y3 = 504;
     strncpy(overlay->shapes[0].color, "yellow", OVERLAY_MAX_COLOR_LENGTH);
     overlay->shapes[0].width = 2;

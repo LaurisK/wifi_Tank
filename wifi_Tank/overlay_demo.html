@@ -595,6 +595,155 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             if (lastOverlayData) drawOverlayData(lastOverlayData);
             drawTrackBars();
+            drawTelemetryPanel();
+        }
+
+        // ── Telemetry HUD panel (top-left) ─────────────────────────────────
+        function drawTelemetryPanel() {
+            if (!lastOverlayData || !lastOverlayData.telemetry) return;
+            const t = lastOverlayData.telemetry;
+
+            // ── Layout constants (canvas units, 1280×720 virtual) ──────────
+            const PX   = 8;          // panel left
+            const PY   = 8;          // panel top
+            const PW   = 212;        // panel width
+            const PAD  = 8;          // inner padding
+            const ROW  = 17;         // row height (baseline-to-baseline)
+            const CX   = PX + PAD;   // content left edge
+            const CE   = PX + PW - PAD; // content right edge
+
+            const hasTmp = t.mcu_temp_c > -100;
+            const ROWS = hasTmp ? 7 : 6;   // +1 for camera row
+            const PH = PAD + ROWS * ROW + PAD;
+
+            // ── Background ─────────────────────────────────────────────────
+            ctx.fillStyle = 'rgba(0,0,0,0.58)';
+            roundRect(ctx, PX, PY, PW, PH, 5);
+            ctx.fill();
+
+            // ── Helpers ────────────────────────────────────────────────────
+            // Baseline y of row i (0-indexed)
+            function ry(i) { return PY + PAD + (i + 1) * ROW - 3; }
+
+            function bar(x, y, w, h, frac, color) {
+                ctx.fillStyle = '#2d2d2d';
+                ctx.fillRect(x, y - h, w, h);
+                const fw = Math.round(w * Math.max(0, Math.min(1, frac)));
+                if (fw > 0) { ctx.fillStyle = color; ctx.fillRect(x, y - h, fw, h); }
+            }
+
+            function label(x, y, text) {
+                ctx.font = '10px Arial';
+                ctx.fillStyle = '#888';
+                ctx.fillText(text, x, y);
+            }
+
+            function value(x, y, text, color) {
+                ctx.font = '11px Arial';
+                ctx.fillStyle = color || '#ddd';
+                ctx.fillText(text, x, y);
+            }
+
+            const LW  = 30;   // label column width
+            const BW  = 92;   // bar width
+            const BH  = 7;    // bar height (px)
+            const BX  = CX + LW + 2;  // bar left edge
+            const VX  = BX + BW + 4;  // value text left edge
+
+            ctx.textAlign = 'left';
+
+            // ── Row 0: FPS  ·  uptime ──────────────────────────────────────
+            ctx.font = 'bold 12px Arial';
+            ctx.fillStyle = '#eee';
+            ctx.fillText('FPS ' + t.fps.toFixed(1), CX, ry(0));
+            ctx.font = '10px Arial';
+            ctx.fillStyle = '#666';
+            ctx.textAlign = 'right';
+            ctx.fillText('↑ ' + fmtUptime(t.uptime_s), CE, ry(0));
+            ctx.textAlign = 'left';
+
+            // ── Row 1: WiFi RSSI signal bars + channel ─────────────────────
+            const rssi   = t.rssi;
+            const sigQ   = Math.max(0, Math.min(1, (rssi + 90) / 60)); // 0=-90dBm, 1=-30dBm
+            const nFill  = Math.round(sigQ * 5);
+            const sigClr = sigQ > 0.60 ? '#4CAF50' : sigQ > 0.30 ? '#FF9800' : '#f44336';
+            const barYr  = ry(1);
+            for (let i = 0; i < 5; i++) {
+                const bh = 4 + i * 3;           // 4, 7, 10, 13, 16 px
+                ctx.fillStyle = i < nFill ? sigClr : '#3a3a3a';
+                ctx.fillRect(CX + i * 8, barYr - bh, 6, bh);
+            }
+            const rssiClr = sigQ > 0.60 ? '#4CAF50' : sigQ > 0.30 ? '#FF9800' : '#f44336';
+            ctx.font = '11px Arial';
+            ctx.fillStyle = rssiClr;
+            ctx.fillText(rssi + ' dBm', CX + 5 * 8 + 5, barYr);
+            if (t.wifi_channel) {
+                ctx.font = '10px Arial';
+                ctx.fillStyle = '#666';
+                ctx.textAlign = 'right';
+                ctx.fillText('ch' + t.wifi_channel, CE, barYr);
+                ctx.textAlign = 'left';
+            }
+
+            // ── Row 2: TX throughput ────────────────────────────────────────
+            // Max scale: 20 Mbps = 20 000 kbps (ESP32 802.11n practical ceiling)
+            const MAX_KBPS = 20000;
+            label(CX,  ry(2), 'TX');
+            bar  (BX,  ry(2), BW, BH, t.tx_kbps / MAX_KBPS, '#4CAF50');
+            value(VX,  ry(2), fmtKbps(t.tx_kbps));
+
+            // ── Row 3: RX throughput ────────────────────────────────────────
+            label(CX,  ry(3), 'RX');
+            bar  (BX,  ry(3), BW, BH, t.rx_kbps / MAX_KBPS, '#2196F3');
+            value(VX,  ry(3), fmtKbps(t.rx_kbps));
+
+            // ── Row 4: Internal heap ────────────────────────────────────────
+            // Reference: ~260 KB is a typical post-boot internal free heap on ESP32
+            const HEAP_REF_KB = 260;
+            const heapFrac = t.int_heap_kb / HEAP_REF_KB;
+            const heapClr  = heapFrac > 0.45 ? '#4CAF50'
+                           : heapFrac > 0.20 ? '#FF9800' : '#f44336';
+            label(CX,  ry(4), 'INT');
+            bar  (BX,  ry(4), BW, BH, heapFrac, heapClr);
+            value(VX,  ry(4), t.int_heap_kb + ' KB', heapClr);
+
+            // ── Row 5: Camera exposure + gain ──────────────────────────────
+            // AEC 0-1200: low = short exposure (bright scene), high = long (dark)
+            // Bar shows exposure; colour: green=bright, orange=mid, red=very dark
+            const CAM_AEC_MAX = 1200;
+            const aecFrac = (t.cam_aec || 0) / CAM_AEC_MAX;
+            const aecClr  = aecFrac < 0.40 ? '#4CAF50'
+                          : aecFrac < 0.75 ? '#FF9800' : '#f44336';
+            label(CX,  ry(5), 'CAM');
+            bar  (BX,  ry(5), BW, BH, aecFrac, aecClr);
+            value(VX,  ry(5), 'G' + (t.cam_gain || 0), aecClr);
+
+            // ── Row 6: MCU temperature (optional) ──────────────────────────
+            if (hasTmp) {
+                const tc    = t.mcu_temp_c.toFixed(1);
+                const tmpClr = t.mcu_temp_c < 60 ? '#4CAF50'
+                             : t.mcu_temp_c < 80 ? '#FF9800' : '#f44336';
+                label(CX,       ry(6), 'MCU');
+                value(CX + LW,  ry(6), tc + ' °C', tmpClr);
+            }
+
+            ctx.textAlign = 'left'; // safety reset
+        }
+
+        function fmtKbps(kbps) {
+            // kbps = kilobits/s  →  display as KB/s or MB/s
+            const kBps = kbps / 8;
+            if (kBps >= 1000) return (kBps / 1000).toFixed(2) + ' MB/s';
+            if (kBps >= 1)    return kBps.toFixed(0) + ' KB/s';
+            return '0';
+        }
+
+        function fmtUptime(s) {
+            const h  = Math.floor(s / 3600);
+            const m  = Math.floor((s % 3600) / 60);
+            const ss = s % 60;
+            if (h > 0) return h + ':' + String(m).padStart(2,'0') + ':' + String(ss).padStart(2,'0');
+            return m + ':' + String(ss).padStart(2,'0');
         }
 
         // ── Track power bars (top-right corner of canvas) ──────────────────

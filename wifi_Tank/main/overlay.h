@@ -54,6 +54,20 @@ typedef struct {
     int8_t r;
 } overlay_motors_t;
 
+// Telemetry data collected every overlay update cycle
+typedef struct {
+    float    fps;           // Camera frames per second
+    int8_t   rssi;          // WiFi RSSI in dBm (negative)
+    uint8_t  wifi_channel;  // WiFi channel 1-13
+    uint32_t tx_kbps;       // Application TX throughput kbps
+    uint32_t rx_kbps;       // Application RX throughput kbps
+    uint32_t int_heap_kb;   // Free internal heap KB (not PSRAM)
+    float    mcu_temp_c;    // MCU temperature °C; -127.0 if unavailable
+    uint32_t uptime_s;      // System uptime seconds
+    uint16_t cam_aec;       // Camera auto-exposure value 0-1200 (lower = brighter scene)
+    uint8_t  cam_gain;      // Camera AGC gain 0-30 (higher = more noise / low light)
+} overlay_telemetry_t;
+
 // Complete overlay data structure
 typedef struct {
     uint8_t text_count;
@@ -62,8 +76,11 @@ typedef struct {
     uint8_t shape_count;
     overlay_shape_t shapes[OVERLAY_MAX_SHAPES];
 
-    bool             has_motors;   // include motors field in JSON when true
-    overlay_motors_t motors;
+    bool               has_motors;
+    overlay_motors_t   motors;
+
+    bool               has_telemetry;
+    overlay_telemetry_t telemetry;
 } overlay_data_t;
 
 /**

@@ -7,6 +7,7 @@
 #include "esp_wifi.h"
 #include "esp_event.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "nvs_flash.h"
 #include "esp_http_server.h"
 #include "esp_netif.h"
@@ -22,6 +23,8 @@
 #include "control.h"
 #include "ota.h"
 #include "params.h"
+#include "driver/temp_sensor.h"   // Original ESP32 internal temperature sensor
+#include "esp_camera.h"           // Camera sensor access for AEC/AGC telemetry
 
 #define WEB_SERVER_PORT 80
 
@@ -38,6 +41,7 @@ typedef struct {
 } app_throughput_t;
 
 app_throughput_t app_throughput = {0};  // Made non-static for access from other modules
+static bool s_temp_sensor_ok = false;
 
 // Public functions to update throughput counters
 void app_throughput_add_rx(uint32_t bytes) {
@@ -169,11 +173,51 @@ static void overlay_demo_task(void *pvParameters) {
         if ((motor_changed || heartbeat_due) && OverlayGetClientCount() > 0) {
             overlay_data_t overlay;
             OverlayCreateSampleData(&overlay);
-            snprintf(overlay.texts[1].content, OVERLAY_MAX_TEXT_LENGTH, "FPS: %.1f", StreamGetFps());
 
             overlay.has_motors = true;
             overlay.motors.l   = (int8_t)cur_l;
             overlay.motors.r   = (int8_t)cur_r;
+
+            // ── Telemetry ──────────────────────────────────────────────────
+            overlay.has_telemetry = true;
+            overlay.telemetry.fps = StreamGetFps();
+
+            // WiFi RSSI + channel
+            wifi_ap_record_t ap_info = {0};
+            if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
+                overlay.telemetry.rssi        = ap_info.rssi;
+                overlay.telemetry.wifi_channel = ap_info.primary;
+            } else {
+                overlay.telemetry.rssi        = -100;
+                overlay.telemetry.wifi_channel = 0;
+            }
+
+            // Throughput (measured by throughput_monitor_task, updated every 1 s)
+            overlay.telemetry.tx_kbps = app_throughput.tx_throughput_kbps;
+            overlay.telemetry.rx_kbps = app_throughput.rx_throughput_kbps;
+
+            // Internal heap (PSRAM excluded — it's the scarce resource)
+            overlay.telemetry.int_heap_kb =
+                (uint32_t)(esp_get_free_internal_heap_size() / 1024);
+
+            // MCU temperature (original ESP32 internal sensor)
+            float mcu_temp = -127.0f;
+            if (s_temp_sensor_ok) {
+                temp_sensor_read_celsius(&mcu_temp);
+            }
+            overlay.telemetry.mcu_temp_c = mcu_temp;
+
+            // Camera sensor status (AEC = exposure, AGC = gain)
+            sensor_t *cam = esp_camera_sensor_get();
+            if (cam) {
+                overlay.telemetry.cam_aec  = cam->status.aec_value;
+                overlay.telemetry.cam_gain = cam->status.agc_gain;
+            }
+
+            // Uptime
+            overlay.telemetry.uptime_s =
+                (uint32_t)(esp_timer_get_time() / 1000000ULL);
+            // ──────────────────────────────────────────────────────────────
 
             int sent = OverlaySendUpdate(&overlay);
             if (sent > 0) {
@@ -214,6 +258,17 @@ void app_main(void) {
 
     mdns_start();
     print_network_scan_tips();
+
+    // MCU temperature sensor (original ESP32 internal sensor)
+    {
+        temp_sensor_config_t ts = TSENS_CONFIG_DEFAULT();
+        if (temp_sensor_set_config(ts) == ESP_OK && temp_sensor_start() == ESP_OK) {
+            s_temp_sensor_ok = true;
+            ESP_LOGI(TAG, "MCU temperature sensor started");
+        } else {
+            ESP_LOGW(TAG, "MCU temperature sensor unavailable");
+        }
+    }
 
     ESP_LOGI(TAG, "WiFi connected, initializing system");
 

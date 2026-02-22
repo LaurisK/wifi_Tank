@@ -10,6 +10,7 @@ idf_component_register(SRCS "main.c" "system.c" "stream.c" "overlay.c" "provisio
                         esp_timer
                         json
                         espressif__mdns
+                        espressif__esp32-camera
                         driver
                         app_update
                     EMBED_TXTFILES
