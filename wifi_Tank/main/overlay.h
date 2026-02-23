@@ -62,7 +62,8 @@ typedef struct {
     uint32_t tx_kbps;       // Application TX throughput kbps
     uint32_t rx_kbps;       // Application RX throughput kbps
     uint32_t int_heap_kb;   // Free internal heap KB (not PSRAM)
-    float    mcu_temp_c;    // MCU temperature °C; -127.0 if unavailable
+    float    mcu_temp_c;    // MCU die temperature °C; -127.0 if unavailable
+    float    cam_temp_c;    // Camera die temperature °C; -127.0 if unavailable
     uint32_t uptime_s;      // System uptime seconds
     uint16_t cam_aec;       // Camera auto-exposure value 0-1200 (lower = brighter scene)
     uint8_t  cam_gain;      // Camera AGC gain 0-30 (higher = more noise / low light)

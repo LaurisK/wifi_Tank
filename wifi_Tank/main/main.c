@@ -23,10 +23,12 @@
 #include "control.h"
 #include "ota.h"
 #include "params.h"
-#if CONFIG_SOC_TEMP_SENSOR_SUPPORTED
-#include "driver/temp_sensor.h"
-#endif
-#include "esp_camera.h"           // Camera sensor access for AEC/AGC telemetry
+#include "esp_camera.h"           // Camera sensor access for AEC/AGC/temp telemetry
+
+// ESP32 original SoC: ROM contains a legacy temperature sensor function.
+// CONFIG_SOC_TEMP_SENSOR_SUPPORTED is only set for S2/S3/C3+ where the
+// officially-supported driver exists; on the original ESP32 we call ROM directly.
+extern uint8_t temprature_sens_read(void);
 
 #define WEB_SERVER_PORT 80
 
@@ -63,9 +65,6 @@ static struct {
     uint32_t tx_throughput_kbps;
 } app_throughput = {0};
 
-#if CONFIG_SOC_TEMP_SENSOR_SUPPORTED
-static bool s_temp_sensor_ok = false;
-#endif
 
 static esp_err_t root_get_handler(httpd_req_t *req) {
     const char *resp = "hello world";
@@ -222,21 +221,38 @@ static void overlay_demo_task(void *pvParameters) {
             overlay.telemetry.int_heap_kb =
                 (uint32_t)(esp_get_free_internal_heap_size() / 1024);
 
-            // MCU temperature (original ESP32 internal sensor)
-            float mcu_temp = -127.0f;
-#if CONFIG_SOC_TEMP_SENSOR_SUPPORTED
-            if (s_temp_sensor_ok) {
-                temp_sensor_read_celsius(&mcu_temp);
-            }
-#endif
-            overlay.telemetry.mcu_temp_c = mcu_temp;
+            // MCU die temperature — ROM function on original ESP32.
+            // Formula (temprature_sens_read() - 32) / 1.8 is the community-established
+            // approximation; accuracy ≈ ±5°C, reflects self-heated die temperature.
+            overlay.telemetry.mcu_temp_c =
+                (temprature_sens_read() - 32) / 1.8f;
 
-            // Camera sensor status (AEC = exposure, AGC = gain)
+            // Camera sensor status (AEC = exposure, AGC = gain) + die temperature.
+            //
+            // OV3660 temperature sensor (datasheet §7.30, registers 0x6700–0x6721):
+            //   0x6700 = 0x05  written by driver reset(): enable + free-running mode
+            //   0x6701 = 25    low-temp alarm at 25/2 = 12.5 °C
+            //   0x6702 = 253   high-temp alarm 1 at 253/2 = 126.5 °C (disabled)
+            //   0x6703 = 209   high-temp alarm 2 at 209/2 = 104.5 °C (disabled)
+            //   0x6719        "TPM_CTRL19 Bit[7:0]: Measured temperature" (read-only)
+            //
+            // Conversion: T(°C) = raw / 2.0   (0.5 °C per LSB)
+            // All alarm thresholds lie above the 85 °C operating max → effectively
+            // disabled, consistent with the 0xFF values at 0x6704/0x6705.
             sensor_t *cam = esp_camera_sensor_get();
+            float cam_temp_c = -127.0f;
             if (cam) {
                 overlay.telemetry.cam_aec  = cam->status.aec_value;
                 overlay.telemetry.cam_gain = cam->status.agc_gain;
+
+                if (cam->get_reg) {
+                    int raw = cam->get_reg(cam, 0x6719, 0xFF);
+                    if (raw > 0 && raw < 255) {
+                        cam_temp_c = (float)raw / 2.0f;
+                    }
+                }
             }
+            overlay.telemetry.cam_temp_c = cam_temp_c;
 
             // Uptime
             overlay.telemetry.uptime_s =
@@ -282,19 +298,6 @@ void app_main(void) {
 
     mdns_start();
     print_network_scan_tips();
-
-    // MCU temperature sensor (only available on SOCs that support it; not original ESP32)
-#if CONFIG_SOC_TEMP_SENSOR_SUPPORTED
-    {
-        temp_sensor_config_t ts = TSENS_CONFIG_DEFAULT();
-        if (temp_sensor_set_config(ts) == ESP_OK && temp_sensor_start() == ESP_OK) {
-            s_temp_sensor_ok = true;
-            ESP_LOGI(TAG, "MCU temperature sensor started");
-        } else {
-            ESP_LOGW(TAG, "MCU temperature sensor unavailable");
-        }
-    }
-#endif
 
     ESP_LOGI(TAG, "WiFi connected, initializing system");
 

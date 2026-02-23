@@ -612,8 +612,10 @@
             const CX   = PX + PAD;   // content left edge
             const CE   = PX + PW - PAD; // content right edge
 
-            const hasTmp = t.mcu_temp_c > -100;
-            const ROWS = hasTmp ? 7 : 6;   // +1 for camera row
+            const hasMcuTmp = t.mcu_temp_c > -100;
+            const hasCamTmp = t.cam_temp_c !== undefined && t.cam_temp_c > -100;
+            const hasTmp    = hasMcuTmp || hasCamTmp;
+            const ROWS = hasTmp ? 7 : 6;
             const PH = PAD + ROWS * ROW + PAD;
 
             // ── Background ─────────────────────────────────────────────────
@@ -718,13 +720,24 @@
             bar  (BX,  ry(5), BW, BH, aecFrac, aecClr);
             value(VX,  ry(5), 'G' + (t.cam_gain || 0), aecClr);
 
-            // ── Row 6: MCU temperature (optional) ──────────────────────────
+            // ── Row 6: temperatures — MCU and/or camera on one line ────────
             if (hasTmp) {
-                const tc    = t.mcu_temp_c.toFixed(1);
-                const tmpClr = t.mcu_temp_c < 60 ? '#4CAF50'
-                             : t.mcu_temp_c < 80 ? '#FF9800' : '#f44336';
-                label(CX,       ry(6), 'MCU');
-                value(CX + LW,  ry(6), tc + ' °C', tmpClr);
+                function tmpClr(tc) {
+                    return tc < 60 ? '#4CAF50' : tc < 80 ? '#FF9800' : '#f44336';
+                }
+                if (hasMcuTmp && hasCamTmp) {
+                    label(CX,           ry(6), 'MCU');
+                    value(CX + LW,      ry(6), t.mcu_temp_c.toFixed(1) + '°', tmpClr(t.mcu_temp_c));
+                    const midX = CX + LW + 44;
+                    label(midX,         ry(6), 'CAM');
+                    value(midX + LW,    ry(6), t.cam_temp_c.toFixed(1) + '°', tmpClr(t.cam_temp_c));
+                } else if (hasMcuTmp) {
+                    label(CX,      ry(6), 'MCU');
+                    value(CX + LW, ry(6), t.mcu_temp_c.toFixed(1) + ' °C', tmpClr(t.mcu_temp_c));
+                } else {
+                    label(CX,      ry(6), 'CAM');
+                    value(CX + LW, ry(6), t.cam_temp_c.toFixed(1) + ' °C', tmpClr(t.cam_temp_c));
+                }
             }
 
             ctx.textAlign = 'left'; // safety reset

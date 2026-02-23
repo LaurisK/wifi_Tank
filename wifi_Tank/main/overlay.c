@@ -121,6 +121,7 @@ static char* overlay_to_json(const overlay_data_t *overlay) {
         cJSON_AddNumberToObject(tel, "rx_kbps",      overlay->telemetry.rx_kbps);
         cJSON_AddNumberToObject(tel, "int_heap_kb",  overlay->telemetry.int_heap_kb);
         cJSON_AddNumberToObject(tel, "mcu_temp_c",   overlay->telemetry.mcu_temp_c);
+        cJSON_AddNumberToObject(tel, "cam_temp_c",   overlay->telemetry.cam_temp_c);
         cJSON_AddNumberToObject(tel, "uptime_s",     overlay->telemetry.uptime_s);
         cJSON_AddNumberToObject(tel, "cam_aec",      overlay->telemetry.cam_aec);
         cJSON_AddNumberToObject(tel, "cam_gain",     overlay->telemetry.cam_gain);
