@@ -191,6 +191,7 @@ static esp_err_t ctrl_ws_handler(httpd_req_t *req)
         return ret;
     }
 
+
     cJSON *root = cJSON_Parse((char *)buf);
     if (root) {
         cJSON *lj = cJSON_GetObjectItem(root, "L");

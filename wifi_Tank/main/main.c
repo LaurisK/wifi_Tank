@@ -23,34 +23,49 @@
 #include "control.h"
 #include "ota.h"
 #include "params.h"
-#include "driver/temp_sensor.h"   // Original ESP32 internal temperature sensor
+#if CONFIG_SOC_TEMP_SENSOR_SUPPORTED
+#include "driver/temp_sensor.h"
+#endif
 #include "esp_camera.h"           // Camera sensor access for AEC/AGC telemetry
 
 #define WEB_SERVER_PORT 80
 
 static const char *TAG = "wifi_Tank";
 
-// Application-level throughput monitoring
-typedef struct {
-    uint32_t total_rx_bytes;
-    uint32_t total_tx_bytes;
+// Throughput measurement via netif linkoutput/input hooks.
+// The standard lwIP MIB2 counters (ifinoctets/ifoutoctets) are only updated
+// for the loopback path, not for the WiFi STA interface. Hooking the netif
+// function pointers directly is the only way to count all WiFi bytes.
+
+static volatile uint32_t s_netif_tx_bytes = 0;
+static volatile uint32_t s_netif_rx_bytes = 0;
+
+// Original function pointers — set once when the hook is installed.
+static netif_linkoutput_fn s_orig_linkoutput = NULL;
+static netif_input_fn      s_orig_input      = NULL;
+
+static err_t throughput_tx_hook(struct netif *netif, struct pbuf *p)
+{
+    s_netif_tx_bytes += p->tot_len;
+    return s_orig_linkoutput(netif, p);
+}
+
+static err_t throughput_rx_hook(struct pbuf *p, struct netif *inp)
+{
+    s_netif_rx_bytes += p->tot_len;
+    return s_orig_input(p, inp);
+}
+
+static struct {
     uint32_t last_rx_bytes;
     uint32_t last_tx_bytes;
     uint32_t rx_throughput_kbps;
     uint32_t tx_throughput_kbps;
-} app_throughput_t;
+} app_throughput = {0};
 
-app_throughput_t app_throughput = {0};  // Made non-static for access from other modules
+#if CONFIG_SOC_TEMP_SENSOR_SUPPORTED
 static bool s_temp_sensor_ok = false;
-
-// Public functions to update throughput counters
-void app_throughput_add_rx(uint32_t bytes) {
-    app_throughput.total_rx_bytes += bytes;
-}
-
-void app_throughput_add_tx(uint32_t bytes) {
-    app_throughput.total_tx_bytes += bytes;
-}
+#endif
 
 static esp_err_t root_get_handler(httpd_req_t *req) {
     const char *resp = "hello world";
@@ -122,33 +137,40 @@ void print_network_scan_tips(void) {
 }
 
 static void throughput_monitor_task(void *pvParameters) {
-    ESP_LOGI(TAG, "Application throughput monitoring started");
+    // Install hooks on the WiFi STA netif's linkoutput (TX) and input (RX).
+    // Done here because this task is created after WiFi connects, so the
+    // netif is guaranteed to be up by the time the task first runs.
+    esp_netif_t *netif_h = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
+    if (netif_h) {
+        struct netif *lif = (struct netif *)esp_netif_get_netif_impl(netif_h);
+        if (lif) {
+            s_orig_linkoutput  = lif->linkoutput;
+            lif->linkoutput    = throughput_tx_hook;
+            s_orig_input       = lif->input;
+            lif->input         = throughput_rx_hook;
+            ESP_LOGI(TAG, "Throughput hooks installed on WiFi STA netif");
+        }
+    }
 
     while (1) {
-        // Calculate throughput in kbps (kilobits per second) over 1 second
-        uint32_t rx_bytes_diff = app_throughput.total_rx_bytes - app_throughput.last_rx_bytes;
-        uint32_t tx_bytes_diff = app_throughput.total_tx_bytes - app_throughput.last_tx_bytes;
-
-        app_throughput.rx_throughput_kbps = (rx_bytes_diff * 8) / 1000;  // Convert to kbps
-        app_throughput.tx_throughput_kbps = (tx_bytes_diff * 8) / 1000;  // Convert to kbps
-
-        // Log throughput every second (only if there's activity)
-        if (rx_bytes_diff > 0 || tx_bytes_diff > 0) {
-            ESP_LOGI(TAG, "Throughput - RX: %lu kbps (%.2f Mbps) | TX: %lu kbps (%.2f Mbps) | Total: RX %.2f MB / TX %.2f MB",
-                     app_throughput.rx_throughput_kbps,
-                     app_throughput.rx_throughput_kbps / 1000.0,
-                     app_throughput.tx_throughput_kbps,
-                     app_throughput.tx_throughput_kbps / 1000.0,
-                     app_throughput.total_rx_bytes / (1024.0 * 1024.0),
-                     app_throughput.total_tx_bytes / (1024.0 * 1024.0));
-        }
-
-        // Update last values
-        app_throughput.last_rx_bytes = app_throughput.total_rx_bytes;
-        app_throughput.last_tx_bytes = app_throughput.total_tx_bytes;
-
-        // Wait 1 second before next measurement
         vTaskDelay(pdMS_TO_TICKS(1000));
+
+        uint32_t rx = s_netif_rx_bytes;
+        uint32_t tx = s_netif_tx_bytes;
+
+        uint32_t rx_diff = rx - app_throughput.last_rx_bytes;
+        uint32_t tx_diff = tx - app_throughput.last_tx_bytes;
+
+        app_throughput.rx_throughput_kbps = (rx_diff * 8) / 1000;
+        app_throughput.tx_throughput_kbps = (tx_diff * 8) / 1000;
+        app_throughput.last_rx_bytes = rx;
+        app_throughput.last_tx_bytes = tx;
+
+        if (rx_diff > 0 || tx_diff > 0) {
+            ESP_LOGI(TAG, "Throughput — RX: %lu kbps | TX: %lu kbps",
+                     app_throughput.rx_throughput_kbps,
+                     app_throughput.tx_throughput_kbps);
+        }
     }
 }
 
@@ -202,9 +224,11 @@ static void overlay_demo_task(void *pvParameters) {
 
             // MCU temperature (original ESP32 internal sensor)
             float mcu_temp = -127.0f;
+#if CONFIG_SOC_TEMP_SENSOR_SUPPORTED
             if (s_temp_sensor_ok) {
                 temp_sensor_read_celsius(&mcu_temp);
             }
+#endif
             overlay.telemetry.mcu_temp_c = mcu_temp;
 
             // Camera sensor status (AEC = exposure, AGC = gain)
@@ -259,7 +283,8 @@ void app_main(void) {
     mdns_start();
     print_network_scan_tips();
 
-    // MCU temperature sensor (original ESP32 internal sensor)
+    // MCU temperature sensor (only available on SOCs that support it; not original ESP32)
+#if CONFIG_SOC_TEMP_SENSOR_SUPPORTED
     {
         temp_sensor_config_t ts = TSENS_CONFIG_DEFAULT();
         if (temp_sensor_set_config(ts) == ESP_OK && temp_sensor_start() == ESP_OK) {
@@ -269,6 +294,7 @@ void app_main(void) {
             ESP_LOGW(TAG, "MCU temperature sensor unavailable");
         }
     }
+#endif
 
     ESP_LOGI(TAG, "WiFi connected, initializing system");
 

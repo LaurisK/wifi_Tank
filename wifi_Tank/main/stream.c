@@ -91,7 +91,7 @@ static int camera_init(void) {
         .frame_size = FRAMESIZE_HD,         // 1280x720
         .jpeg_quality = 12,                 // 0-63, lower = higher quality
         .fb_count = 2,                      // Double buffering
-        .grab_mode = CAMERA_GRAB_WHEN_EMPTY // Grab next frame when buffer is empty
+        .grab_mode = CAMERA_GRAB_LATEST     // Always deliver the most recent frame
     };
 
     // Initialize camera
@@ -166,7 +166,7 @@ static esp_err_t stream_handler(httpd_req_t *req) {
 
     // Stream loop
     while (true) {
-        // Capture frame
+        // Capture frame — with CAMERA_GRAB_LATEST this is always the freshest frame
         fb = esp_camera_fb_get();
         if (!fb) {
             ESP_LOGE(TAG, "Camera capture failed");
@@ -192,20 +192,19 @@ static esp_err_t stream_handler(httpd_req_t *req) {
 
         // Send actual JPEG data
         res = httpd_resp_send_chunk(req, (const char *)_jpg_buf, _jpg_buf_len);
+
+        // Return framebuffer as early as possible so the camera can capture the next frame
+        esp_camera_fb_return(fb);
+        fb = NULL;
+
         if (res != ESP_OK) {
             break;
         }
 
-        // Return framebuffer
-        esp_camera_fb_return(fb);
-        fb = NULL;
 
         // Update stats
         stream_state.frame_count++;
         stream_state.last_frame_time = xTaskGetTickCount();
-
-        // Thermal management: Add 100ms delay between frames (~10 fps max)
-        vTaskDelay(pdMS_TO_TICKS(100));
     }
 
     // Cleanup
