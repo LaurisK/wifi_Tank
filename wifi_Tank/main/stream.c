@@ -162,7 +162,8 @@ static esp_err_t stream_handler(httpd_req_t *req) {
         return res;
     }
 
-    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin",          "*");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Private-Network", "true");
 
     // Stream loop
     while (true) {
@@ -223,6 +224,20 @@ extern const uint8_t overlay_demo_html_start[] asm("_binary_overlay_demo_html_st
 extern const uint8_t overlay_demo_html_end[]   asm("_binary_overlay_demo_html_end");
 
 /**
+ * @brief OPTIONS handler — satisfies Chrome's Private Network Access preflight
+ */
+static esp_err_t stream_cors_handler(httpd_req_t *req) {
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin",          "*");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Methods",         "GET, OPTIONS");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Headers",         "Content-Type");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Private-Network", "true");
+    httpd_resp_set_hdr(req, "Access-Control-Max-Age",               "86400");
+    httpd_resp_set_status(req, "204 No Content");
+    httpd_resp_send(req, NULL, 0);
+    return ESP_OK;
+}
+
+/**
  * @brief HTTP handler serving the overlay demo page
  */
 static esp_err_t stream_info_handler(httpd_req_t *req) {
@@ -251,9 +266,10 @@ int StreamInit(uint16_t stream_port) {
     config.ctrl_port = stream_port + 1;
     config.max_open_sockets = 13;  // Increased from 7 for more concurrent clients
     config.lru_purge_enable = true;
-    config.send_wait_timeout = 10;  // Add send timeout
-    config.recv_wait_timeout = 10;  // Add receive timeout
-    config.backlog_conn = 5;  // Add connection backlog
+    config.send_wait_timeout = 10;
+    config.recv_wait_timeout = 10;
+    config.backlog_conn = 5;
+    config.uri_match_fn = httpd_uri_match_wildcard; // needed for OPTIONS /*
 
     ESP_LOGI(TAG, "Starting stream server on port %d", stream_port);
 
@@ -279,6 +295,20 @@ int StreamInit(uint16_t stream_port) {
         .user_ctx = NULL
     };
     httpd_register_uri_handler(stream_state.server, &info_uri);
+
+    // OPTIONS handler for Chrome Private Network Access preflight.
+    // Pages at http://tank.local:80/ request http://tank.local:81/stream
+    // (different port = different origin). Chrome 104+ sends an OPTIONS
+    // preflight with Access-Control-Request-Private-Network: true before
+    // the actual GET. Without this handler the preflight returns 405 and
+    // Chrome silently blocks the stream connection.
+    httpd_uri_t cors_uri = {
+        .uri = "/*",
+        .method = HTTP_OPTIONS,
+        .handler = stream_cors_handler,
+        .user_ctx = NULL
+    };
+    httpd_register_uri_handler(stream_state.server, &cors_uri);
 
     stream_state.port = stream_port;
 

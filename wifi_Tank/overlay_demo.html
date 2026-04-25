@@ -433,7 +433,7 @@
         // ── Host ───────────────────────────────────────────────────────────
         // Override via ?host=tank_1234.local in the URL
         const _urlParams = new URLSearchParams(window.location.search);
-        const ESP_HOST = _urlParams.get('host') || 'tank.local';
+        const ESP_HOST = _urlParams.get('host') || window.location.hostname;
 
         // ── State ──────────────────────────────────────────────────────────
         let ws   = null;
