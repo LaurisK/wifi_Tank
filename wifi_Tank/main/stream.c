@@ -14,6 +14,25 @@
 
 static const char *TAG = "STREAM";
 
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+// Camera pin definitions for ESP32-S3-CAM (WROOM variant)
+#define CAM_PIN_PWDN    38
+#define CAM_PIN_RESET   -1
+#define CAM_PIN_XCLK    15
+#define CAM_PIN_SIOD    4
+#define CAM_PIN_SIOC    5
+#define CAM_PIN_D7      16
+#define CAM_PIN_D6      17
+#define CAM_PIN_D5      18
+#define CAM_PIN_D4      12
+#define CAM_PIN_D3      10
+#define CAM_PIN_D2      8
+#define CAM_PIN_D1      9
+#define CAM_PIN_D0      11
+#define CAM_PIN_VSYNC   6
+#define CAM_PIN_HREF    7
+#define CAM_PIN_PCLK    13
+#else
 // Camera pin definitions for AI-Thinker ESP32-CAM
 #define CAM_PIN_PWDN    32
 #define CAM_PIN_RESET   -1  // Software reset
@@ -32,6 +51,7 @@ static const char *TAG = "STREAM";
 #define CAM_PIN_VSYNC   25
 #define CAM_PIN_HREF    23
 #define CAM_PIN_PCLK    22
+#endif
 
 // Stream configuration
 #define STREAM_BOUNDARY "123456789000000000000987654321"
@@ -62,7 +82,11 @@ static struct {
  * @brief Initialize the camera
  */
 static int camera_init(void) {
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+    ESP_LOGI(TAG, "Initializing camera for ESP32-S3-CAM");
+#else
     ESP_LOGI(TAG, "Initializing camera for AI-Thinker ESP32-CAM with OV3660");
+#endif
 
     camera_config_t config = {
         .pin_pwdn = CAM_PIN_PWDN,

@@ -25,10 +25,13 @@
 #include "params.h"
 #include "esp_camera.h"           // Camera sensor access for AEC/AGC/temp telemetry
 
-// ESP32 original SoC: ROM contains a legacy temperature sensor function.
-// CONFIG_SOC_TEMP_SENSOR_SUPPORTED is only set for S2/S3/C3+ where the
-// officially-supported driver exists; on the original ESP32 we call ROM directly.
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+#include "driver/temperature_sensor.h"
+static temperature_sensor_handle_t s_temp_sensor = NULL;
+#else
+// ROM temperature sensor — only available on original ESP32.
 extern uint8_t temprature_sens_read(void);
+#endif
 
 #define WEB_SERVER_PORT 80
 
@@ -226,11 +229,18 @@ static void overlay_demo_task(void *pvParameters) {
             overlay.telemetry.int_heap_kb =
                 (uint32_t)(esp_get_free_internal_heap_size() / 1024);
 
-            // MCU die temperature — ROM function on original ESP32.
-            // Formula (temprature_sens_read() - 32) / 1.8 is the community-established
-            // approximation; accuracy ≈ ±5°C, reflects self-heated die temperature.
+            // MCU die temperature
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+            if (s_temp_sensor) {
+                float t;
+                if (temperature_sensor_get_celsius(s_temp_sensor, &t) == ESP_OK)
+                    overlay.telemetry.mcu_temp_c = t;
+            }
+#else
+            // ROM temperature approximation: accuracy ≈ ±5°C, reflects self-heated die.
             overlay.telemetry.mcu_temp_c =
                 (temprature_sens_read() - 32) / 1.8f;
+#endif
 
             // Camera sensor status (AEC = exposure, AGC = gain) + die temperature.
             //
@@ -285,14 +295,29 @@ void app_main(void) {
 
     ESP_LOGI(TAG, "Starting wifi_Tank application");
 
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+    // GPIO14,21,41,42 — free after camera(4-18,38), LEDs(2,48), SD(39,40)
+    motor_cfg_t motor_cfg = {
+        .left  = { .gpio_rpwm = 14, .gpio_lpwm = 21 },
+        .right = { .gpio_rpwm = 41, .gpio_lpwm = 42 },
+    };
+#else
     // Initialise motor drivers (GPIO12-15, BTS7960B EN tied to 5 V)
     motor_cfg_t motor_cfg = {
         .left  = { .gpio_rpwm = 13, .gpio_lpwm = 14 },
         .right = { .gpio_rpwm = 15, .gpio_lpwm = 12 },
     };
+#endif
     if (MotorInit(&motor_cfg) != 0) {
         ESP_LOGW(TAG, "Motor init failed");
     }
+
+#ifdef CONFIG_IDF_TARGET_ESP32S3
+    temperature_sensor_config_t temp_cfg = TEMPERATURE_SENSOR_CONFIG_DEFAULT(10, 80);
+    if (temperature_sensor_install(&temp_cfg, &s_temp_sensor) == ESP_OK) {
+        temperature_sensor_enable(s_temp_sensor);
+    }
+#endif
 
     ESP_ERROR_CHECK(nvs_flash_init());
 
