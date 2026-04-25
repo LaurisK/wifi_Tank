@@ -298,6 +298,19 @@
             <!-- ── Parameters panel (left 30%) ── -->
             <div class="params-col">
 
+                <!-- Device Name -->
+                <div class="sec-head">
+                    <span class="sec-title">Device</span>
+                </div>
+
+                <div class="params-row">
+                    <input type="text" id="deviceName" class="params-input"
+                           placeholder="tank_xxxx" maxlength="32"
+                           onkeydown="if(event.key==='Enter')saveDeviceName()" />
+                    <button onclick="saveDeviceName()">Save</button>
+                </div>
+                <div class="params-msg" id="deviceMsg"></div>
+
                 <!-- WiFi Networks -->
                 <div class="sec-head">
                     <span class="sec-title">WiFi Networks</span>
@@ -418,7 +431,9 @@
 
     <script>
         // ── Host ───────────────────────────────────────────────────────────
-        const ESP_HOST = 'tank.local';
+        // Override via ?host=tank_1234.local in the URL
+        const _urlParams = new URLSearchParams(window.location.search);
+        const ESP_HOST = _urlParams.get('host') || 'tank.local';
 
         // ── State ──────────────────────────────────────────────────────────
         let ws   = null;
@@ -446,6 +461,7 @@
             canvas = document.getElementById('overlayCanvas');
             ctx    = canvas.getContext('2d');
             connect();
+            loadDeviceName();
             loadNetworks();
             loadCtrlParams();
             loadVersion();
@@ -919,6 +935,46 @@
             if (vm)           parts.push('scaleY(-1)');
             document.getElementById('videoStream').style.transform =
                 parts.length ? parts.join(' ') : '';
+        }
+
+        // ── Device name ──────────────────────────────────────────────────────
+        function loadDeviceName() {
+            fetch('http://' + ESP_HOST + '/params/device')
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    document.getElementById('deviceName').value = d.name || '';
+                    setDeviceMsg('');
+                })
+                .catch(function () {});
+        }
+
+        function saveDeviceName() {
+            var name = document.getElementById('deviceName').value.trim();
+            if (!name) { setDeviceMsg('Name required', '#f44336'); return; }
+            setDeviceMsg('Saving…', '#888');
+            fetch('http://' + ESP_HOST + '/params/device', {
+                method: 'POST',
+                body:   'name=' + encodeURIComponent(name),
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (d) {
+                    if (d.ok) {
+                        setDeviceMsg(
+                            'Saved! New address: http://' + name + '.local' +
+                            ' — reload with ?host=' + name + '.local',
+                            '#4CAF50'
+                        );
+                    } else {
+                        setDeviceMsg('Save error.', '#f44336');
+                    }
+                })
+                .catch(function (err) { setDeviceMsg('Error: ' + err, '#f44336'); });
+        }
+
+        function setDeviceMsg(msg, color) {
+            var el = document.getElementById('deviceMsg');
+            el.textContent = msg;
+            el.style.color = color || '#888';
         }
 
         // ── Parameters: WiFi Networks ────────────────────────────────────────

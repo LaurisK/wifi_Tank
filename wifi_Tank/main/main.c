@@ -119,8 +119,11 @@ static httpd_handle_t start_webserver(void) {
 }
 
 static void mdns_start(void) {
+    char hostname[64];
+    ParamsGetDeviceName(hostname, sizeof(hostname));
+
     ESP_ERROR_CHECK(mdns_init());
-    mdns_hostname_set("tank");
+    mdns_hostname_set(hostname);
     mdns_instance_name_set("Tank Robot");
 
     // Advertise each service so clients can discover them
@@ -128,11 +131,13 @@ static void mdns_start(void) {
     mdns_service_add("Tank Stream", "_http",  "_tcp", 81,              NULL, 0);
     mdns_service_add("Tank Ctrl",   "_tank",  "_tcp", 8080,            NULL, 0);
 
-    ESP_LOGI(TAG, "mDNS started — device reachable as http://tank.local");
+    ESP_LOGI(TAG, "mDNS started — device reachable as http://%s.local", hostname);
 }
 
 void print_network_scan_tips(void) {
-    ESP_LOGI(TAG, "Device reachable at http://tank.local");
+    char hostname[64];
+    ParamsGetDeviceName(hostname, sizeof(hostname));
+    ESP_LOGI(TAG, "Device reachable at http://%s.local", hostname);
 }
 
 static void throughput_monitor_task(void *pvParameters) {
@@ -322,13 +327,13 @@ void app_main(void) {
         // NOTE: Must NOT be on the stream server (port 81) — the stream handler
         // blocks the httpd task, preventing any WS connections from being processed.
         if (OverlayInit(server) == 0) {
-            ESP_LOGI(TAG, "Overlay WebSocket initialized at: ws://tank.local:%d/ws", WEB_SERVER_PORT);
+            ESP_LOGI(TAG, "Overlay WebSocket initialized at: ws://<hostname>:%d/ws", WEB_SERVER_PORT);
         } else {
             ESP_LOGW(TAG, "Failed to initialize overlay WebSocket");
         }
 
         if (ControlInit(server) == 0) {
-            ESP_LOGI(TAG, "Control WebSocket initialized at: ws://tank.local:%d/ctrl", WEB_SERVER_PORT);
+            ESP_LOGI(TAG, "Control WebSocket initialized at: ws://<hostname>:%d/ctrl", WEB_SERVER_PORT);
         } else {
             ESP_LOGW(TAG, "Failed to initialize control WebSocket");
         }

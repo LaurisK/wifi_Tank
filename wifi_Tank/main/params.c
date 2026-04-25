@@ -8,9 +8,61 @@
 
 #include "esp_log.h"
 #include "esp_http_server.h"
+#include "esp_mac.h"
+#include "nvs.h"
+#include "mdns.h"
 #include "cJSON.h"
 
 static const char *TAG = "params";
+
+// ---------------------------------------------------------------------------
+// Device name — stored in NVS, default tank_XXXX (CRC16 of WiFi MAC)
+// ---------------------------------------------------------------------------
+
+#define NVS_SYS_NS       "tank_sys"
+#define NVS_KEY_DEV_NAME "dev_name"
+#define DEVICE_NAME_MAX  32
+
+static uint16_t crc16_ccitt(const uint8_t *data, size_t len) {
+    uint16_t crc = 0xFFFF;
+    for (size_t i = 0; i < len; i++) {
+        crc ^= (uint16_t)data[i] << 8;
+        for (int j = 0; j < 8; j++)
+            crc = (crc & 0x8000) ? (uint16_t)((crc << 1) ^ 0x1021) : (uint16_t)(crc << 1);
+    }
+    return crc;
+}
+
+static void device_name_default(char *buf, size_t bufsz) {
+    uint8_t mac[6] = {0};
+    esp_read_mac(mac, ESP_MAC_WIFI_STA);
+    uint16_t crc = crc16_ccitt(mac, sizeof(mac));
+    snprintf(buf, bufsz, "tank_%04x", crc);
+}
+
+esp_err_t ParamsGetDeviceName(char *buf, size_t bufsz) {
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(NVS_SYS_NS, NVS_READONLY, &h);
+    if (err == ESP_OK) {
+        size_t sz = bufsz;
+        err = nvs_get_str(h, NVS_KEY_DEV_NAME, buf, &sz);
+        nvs_close(h);
+        if (err == ESP_OK && buf[0] != '\0')
+            return ESP_OK;
+    }
+    device_name_default(buf, bufsz);
+    return ESP_OK;
+}
+
+static esp_err_t device_name_save(const char *name) {
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(NVS_SYS_NS, NVS_READWRITE, &h);
+    if (err != ESP_OK) return err;
+    err = nvs_set_str(h, NVS_KEY_DEV_NAME, name);
+    if (err == ESP_OK) err = nvs_commit(h);
+    nvs_close(h);
+    return err;
+}
 
 // ---------------------------------------------------------------------------
 // URL-encoded body parser (avoids CORS pre-flight for POST requests)
@@ -260,6 +312,72 @@ static esp_err_t handle_post_ctrl(httpd_req_t *req) {
 }
 
 // ---------------------------------------------------------------------------
+// GET /params/device   → {"name":"tank_xxxx"}
+// ---------------------------------------------------------------------------
+
+static esp_err_t handle_get_device(httpd_req_t *req) {
+    httpd_resp_set_type(req, "application/json");
+    set_cors(req);
+
+    char name[DEVICE_NAME_MAX + 1];
+    ParamsGetDeviceName(name, sizeof(name));
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "name", name);
+    char *body = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+
+    if (body) {
+        httpd_resp_send(req, body, (ssize_t)strlen(body));
+        free(body);
+    } else {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "JSON alloc failed");
+        return ESP_FAIL;
+    }
+    return ESP_OK;
+}
+
+// ---------------------------------------------------------------------------
+// POST /params/device   body: name=tank_xxxx
+// ---------------------------------------------------------------------------
+
+static esp_err_t handle_post_device(httpd_req_t *req) {
+    httpd_resp_set_type(req, "application/json");
+    set_cors(req);
+
+    char body[128];
+    if (recv_body(req, body, sizeof(body)) != ESP_OK) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Empty body");
+        return ESP_FAIL;
+    }
+
+    char name[DEVICE_NAME_MAX + 1];
+    parse_field(body, "name", name, sizeof(name));
+
+    if (name[0] == '\0') {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "name required");
+        return ESP_FAIL;
+    }
+    if (strlen(name) > DEVICE_NAME_MAX) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "name too long (max 32)");
+        return ESP_FAIL;
+    }
+
+    esp_err_t err = device_name_save(name);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "device_name_save failed: %s", esp_err_to_name(err));
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "NVS write failed");
+        return ESP_FAIL;
+    }
+
+    mdns_hostname_set(name);
+    ESP_LOGI(TAG, "Device name changed to '%s'", name);
+
+    httpd_resp_send(req, "{\"ok\":true}", HTTPD_RESP_USE_STRLEN);
+    return ESP_OK;
+}
+
+// ---------------------------------------------------------------------------
 // Registration
 // ---------------------------------------------------------------------------
 
@@ -293,6 +411,16 @@ static const httpd_uri_t uri_post_ctrl = {
     .method  = HTTP_POST,
     .handler = handle_post_ctrl,
 };
+static const httpd_uri_t uri_get_device = {
+    .uri     = "/params/device",
+    .method  = HTTP_GET,
+    .handler = handle_get_device,
+};
+static const httpd_uri_t uri_post_device = {
+    .uri     = "/params/device",
+    .method  = HTTP_POST,
+    .handler = handle_post_device,
+};
 
 esp_err_t ParamsInit(httpd_handle_t server) {
     httpd_register_uri_handler(server, &uri_get_networks);
@@ -301,6 +429,8 @@ esp_err_t ParamsInit(httpd_handle_t server) {
     httpd_register_uri_handler(server, &uri_delete_network);
     httpd_register_uri_handler(server, &uri_get_ctrl);
     httpd_register_uri_handler(server, &uri_post_ctrl);
+    httpd_register_uri_handler(server, &uri_get_device);
+    httpd_register_uri_handler(server, &uri_post_device);
     ESP_LOGI(TAG, "Params endpoints registered");
     return ESP_OK;
 }
