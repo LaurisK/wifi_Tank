@@ -1,6 +1,9 @@
 # WiFi Tank
 
-ESP-IDF project for the AI-Thinker ESP32-CAM (OV3660 sensor) that streams live MJPEG video over WiFi with a real-time WebSocket overlay system.
+ESP-IDF project for a WiFi-controlled tank with live MJPEG video streaming and a real-time WebSocket overlay system. Supports two hardware targets:
+
+- **AI-Thinker ESP32-CAM** (`esp32`) — original build, OV3660 sensor, 4 MB flash
+- **ESP32-S3-CAM** (`esp32s3`) — S3 WROOM variant, 8 MB flash, octal PSRAM
 
 ## Environment Setup
 
@@ -28,21 +31,27 @@ git submodule update --init --recursive   # pulls the Trice logging library
 
 ```bash
 cd wifi_Tank
-idf.py set-target esp32
-idf.py reconfigure    # downloads espressif__esp32-camera and espressif__esp_jpeg
+idf.py set-target esp32       # or esp32s3 for the S3-CAM build
+idf.py reconfigure            # downloads espressif__esp32-camera and espressif__esp_jpeg
 ```
 
 ## Build and Flash
 
+Both targets share the same source tree. Use separate build directories to keep both artifacts without reconfiguring.
+
 ```bash
 cd wifi_Tank
 
-# Build
-idf.py build
+# --- AI-Thinker ESP32-CAM ---
+idf.py -B build_esp32 set-target esp32 build
+idf.py -B build_esp32 -p /dev/ttyUSB0 flash monitor
 
-# Flash and open serial monitor (adjust port as needed)
-idf.py -p /dev/ttyUSB0 flash monitor
+# --- ESP32-S3-CAM ---
+idf.py -B build_esp32s3 set-target esp32s3 build
+idf.py -B build_esp32s3 -p /dev/ttyUSB0 flash monitor
 ```
+
+Target-specific defaults (flash size, PSRAM mode) are picked up automatically from `sdkconfig.defaults.<target>` during `set-target`.
 
 The serial monitor shows startup logs including the obtained IP address. Press `Ctrl+]` to exit the monitor.
 
@@ -191,29 +200,126 @@ Throughput - RX: 450 kbps (0.45 Mbps) | TX: 3200 kbps (3.20 Mbps) | Total: RX 0.
 
 ## Hardware
 
-- **MCU**: ESP32 (AI-Thinker ESP32-CAM form factor)
-- **Camera**: OV3660
-- **Flash**: 4 MB — dual OTA partitions (2 × 1984 KB) + NVS + PHY + OTA data (see `partitions.csv`)
-- **XCLK**: 20 MHz on GPIO 0
-- **Camera data bus**: GPIOs 5, 18, 19, 21, 34, 35, 36, 39
-- **VSYNC / HREF / PCLK**: GPIOs 25, 23, 22
-- **I²C (SIOD/SIOC)**: GPIOs 26, 27
-- **PWDN**: GPIO 32
+Two boards are supported. The active target is selected at build time via `idf.py set-target`.
+
+---
+
+### AI-Thinker ESP32-CAM (`esp32`)
+
+**MCU**: ESP32 · **Camera**: OV3660 · **Flash**: 4 MB quad PSRAM
+
+#### Camera (OV3660 — DVP parallel interface)
+
+| Signal | GPIO | Notes |
+|--------|------|-------|
+| PWDN | 32 | Power-down, active-high |
+| RESET | — | Software reset (not wired) |
+| XCLK | 0 | 20 MHz master clock |
+| SIOD | 26 | SCCB / I²C data |
+| SIOC | 27 | SCCB / I²C clock |
+| D0 | 5 | Pixel data bit 0 |
+| D1 | 18 | Pixel data bit 1 |
+| D2 | 19 | Pixel data bit 2 |
+| D3 | 21 | Pixel data bit 3 |
+| D4 | 36 | Pixel data bit 4 |
+| D5 | 39 | Pixel data bit 5 |
+| D6 | 34 | Pixel data bit 6 |
+| D7 | 35 | Pixel data bit 7 |
+| VSYNC | 25 | Frame sync |
+| HREF | 23 | Line sync |
+| PCLK | 22 | Pixel clock |
+
+#### Motor driver (BTS7960B — two channels, H-bridge)
+
+LEDC timer 1, channels 1–4, 20 kHz PWM. EN pins tied to 5 V externally.
+
+| Signal | GPIO | Motor |
+|--------|------|-------|
+| RPWM (forward) | 13 | Left track |
+| LPWM (reverse) | 14 | Left track |
+| RPWM (forward) | 15 | Right track |
+| LPWM (reverse) | 12 | Right track |
+
+#### Reserved / occupied pins summary
+
+Pins in use: 0, 5, 12, 13, 14, 15, 18, 19, 21, 22, 23, 25, 26, 27, 32, 34, 35, 36, 39.
+
+---
+
+### ESP32-S3-CAM (`esp32s3`)
+
+**MCU**: ESP32-S3 · **Camera**: OV3660 (or compatible) · **Flash**: 8 MB octal PSRAM
+
+#### Camera (DVP parallel interface via LCD_CAM peripheral)
+
+| Signal | GPIO | Notes |
+|--------|------|-------|
+| PWDN | 38 | Power-down, active-high |
+| RESET | — | Software reset (not wired) |
+| XCLK | 15 | 20 MHz master clock |
+| SIOD | 4 | SCCB / I²C data |
+| SIOC | 5 | SCCB / I²C clock |
+| D0 | 11 | Pixel data bit 0 |
+| D1 | 9 | Pixel data bit 1 |
+| D2 | 8 | Pixel data bit 2 |
+| D3 | 10 | Pixel data bit 3 |
+| D4 | 12 | Pixel data bit 4 |
+| D5 | 18 | Pixel data bit 5 |
+| D6 | 17 | Pixel data bit 6 |
+| D7 | 16 | Pixel data bit 7 |
+| VSYNC | 6 | Frame sync |
+| HREF | 7 | Line sync |
+| PCLK | 13 | Pixel clock |
+
+#### On-board LEDs (board hardware, not driven by firmware)
+
+| GPIO | Type | Purpose |
+|------|------|---------|
+| 2 | Single LED | Blue status indicator |
+| 48 | WS2812B | RGB flash LED |
+
+#### SD card (on-board slot)
+
+| GPIO | Signal |
+|------|--------|
+| 39 | CLK |
+| 40 | CMD |
+
+#### Motor driver (BTS7960B — two channels, H-bridge)
+
+LEDC timer 1, channels 1–4, 20 kHz PWM. EN pins tied to 5 V externally.
+Pins chosen as the cleanest available after camera (4–18, 38), LEDs (2, 48), SD (39–40), USB (19–20), UART0 (43–44), and strapping pins (0, 45, 46) are excluded.
+
+| Signal | GPIO | Motor |
+|--------|------|-------|
+| RPWM (forward) | 14 | Left track |
+| LPWM (reverse) | 21 | Left track |
+| RPWM (forward) | 41 | Right track |
+| LPWM (reverse) | 42 | Right track |
+
+#### Reserved / occupied pins summary
+
+Pins in use: 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 21, 38, 39, 40, 41, 42, 48.
+
+Free / available: 1, 3, 19, 20 (USB D±), 22, 23, 24, 25, 26, 27, 43 (UART TX), 44 (UART RX), 45, 46 (strapping), 47.
 
 ## Project Structure
 
 ```
 wifi_Tank/
 ├── main/
-│   ├── main.c          # Entry point, web server, throughput monitor
-│   ├── provisioning.c  # SoftAP setup, NVS credential management
-│   ├── stream.c        # Camera init, MJPEG HTTP server (port 81)
-│   ├── overlay.c       # WebSocket overlay system
-│   ├── system.c        # TCP server (port 8080)
-│   └── ota.c           # OTA firmware update (POST /ota, GET /version)
-├── provisioning.html   # WiFi setup page (embedded into firmware)
-├── overlay_demo.html   # Browser overlay demo
-├── partitions.csv      # Custom partition table
-├── sdkconfig           # ESP-IDF project configuration
-└── Submodules/trice/   # Trice logging library
+│   ├── main.c                  # Entry point, web server, throughput monitor
+│   ├── provisioning.c          # SoftAP setup, NVS credential management
+│   ├── stream.c                # Camera init, MJPEG HTTP server (port 81)
+│   ├── motor.c / motor.h       # BTS7960B PWM motor driver
+│   ├── overlay.c               # WebSocket overlay system
+│   ├── system.c                # TCP server (port 8080)
+│   └── ota.c                   # OTA firmware update (POST /ota, GET /version)
+├── provisioning.html           # WiFi setup page (embedded into firmware)
+├── overlay_demo.html           # Browser overlay demo
+├── partitions.csv              # Custom partition table (shared by both targets)
+├── sdkconfig                   # Active ESP-IDF config (generated, do not edit)
+├── sdkconfig.defaults.esp32    # Default config overrides for ESP32 target
+├── sdkconfig.defaults.esp32s3  # Default config overrides for ESP32-S3 target
+└── Submodules/trice/           # Trice logging library
 ```
