@@ -460,8 +460,7 @@ static void sta_event_handler(void *arg, esp_event_base_t event_base,
             s_current_net_idx++;
             uint8_t count = nvs_get_net_count();
             if (s_current_net_idx >= (int)count) {
-                ESP_LOGE(TAG, "All %d known networks exhausted, clearing and rebooting to SoftAP", count);
-                ProvisioningClearCredentials();
+                ESP_LOGE(TAG, "All %d known networks exhausted, rebooting to SoftAP", count);
                 esp_restart();
                 return;
             }
