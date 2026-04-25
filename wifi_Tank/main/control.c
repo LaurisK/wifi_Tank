@@ -245,6 +245,6 @@ int ControlInit(httpd_handle_t server)
         return -1;
     }
 
-    ESP_LOGI(TAG, "init ok — ws://<host>/ctrl");
+    ESP_LOGI(TAG, "init ok");
     return 0;
 }

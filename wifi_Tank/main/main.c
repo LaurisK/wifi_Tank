@@ -326,14 +326,17 @@ void app_main(void) {
         // Initialize overlay WebSocket on the main server (port 80)
         // NOTE: Must NOT be on the stream server (port 81) — the stream handler
         // blocks the httpd task, preventing any WS connections from being processed.
+        char hostname[64];
+        ParamsGetDeviceName(hostname, sizeof(hostname));
+
         if (OverlayInit(server) == 0) {
-            ESP_LOGI(TAG, "Overlay WebSocket initialized at: ws://<hostname>:%d/ws", WEB_SERVER_PORT);
+            ESP_LOGI(TAG, "Overlay WebSocket initialized at: ws://%s.local:%d/ws", hostname, WEB_SERVER_PORT);
         } else {
             ESP_LOGW(TAG, "Failed to initialize overlay WebSocket");
         }
 
         if (ControlInit(server) == 0) {
-            ESP_LOGI(TAG, "Control WebSocket initialized at: ws://<hostname>:%d/ctrl", WEB_SERVER_PORT);
+            ESP_LOGI(TAG, "Control WebSocket initialized at: ws://%s.local:%d/ctrl", hostname, WEB_SERVER_PORT);
         } else {
             ESP_LOGW(TAG, "Failed to initialize control WebSocket");
         }

@@ -16,15 +16,16 @@
 #include "nvs_flash.h"
 #include "nvs.h"
 
-#define TAG              "provisioning"
-#define NVS_CFG_NS       "tank_cfg"   /* network credentials list */
-#define NVS_BOOT_NS      "tank_boot"  /* one-time boot flags (never erased) */
+#define TAG               "provisioning"
+#define NVS_CFG_NS        "tank_cfg"
+#define NVS_BOOT_NS       "tank_boot"
 #define NVS_KEY_NET_COUNT "net_count"
 #define NVS_KEY_SEEDED    "seeded"
-#define SOFTAP_SSID      "Tank-Setup"
-#define SOFTAP_CHANNEL   1
-#define SOFTAP_MAX_CONN  4
-#define PER_NET_RETRIES  3
+#define SOFTAP_SSID       "Tank-Setup"
+#define SOFTAP_CHANNEL    1
+#define SOFTAP_MAX_CONN   4
+#define PER_NET_RETRIES   3
+#define RESCAN_INTERVAL_MS 30000
 
 /* Default networks written to NVS on first boot only */
 static const struct { const char *ssid; const char *pass; } s_defaults[] = {
@@ -337,33 +338,86 @@ static void start_provisioning_server(void) {
 }
 
 // ---------------------------------------------------------------------------
-// SoftAP mode
+// Scan helpers
 // ---------------------------------------------------------------------------
 
-static void start_softap(void) {
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_create_default_wifi_ap();
-
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-
-    wifi_config_t ap_config = {
-        .ap = {
-            .ssid           = SOFTAP_SSID,
-            .ssid_len       = strlen(SOFTAP_SSID),
-            .channel        = SOFTAP_CHANNEL,
-            .password       = "",
-            .max_connection = SOFTAP_MAX_CONN,
-            .authmode       = WIFI_AUTH_OPEN,
-        },
+/* Blocking scan; returns index of first visible known network, or -1.
+   Requires WiFi to be started in STA or APSTA mode. */
+static int scan_find_known_network(void) {
+    wifi_scan_config_t scan_cfg = {
+        .scan_type            = WIFI_SCAN_TYPE_ACTIVE,
+        .scan_time.active.min = 100,
+        .scan_time.active.max = 300,
     };
+    esp_err_t err = esp_wifi_scan_start(&scan_cfg, true);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Scan failed: %s", esp_err_to_name(err));
+        return -1;
+    }
 
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap_config));
-    ESP_ERROR_CHECK(esp_wifi_start());
+    uint16_t ap_count = 0;
+    esp_wifi_scan_get_ap_num(&ap_count);
+    if (ap_count == 0) {
+        ESP_LOGI(TAG, "Scan: no APs visible");
+        return -1;
+    }
 
-    ESP_LOGI(TAG, "SoftAP started: SSID='%s', open, IP=192.168.4.1", SOFTAP_SSID);
+    wifi_ap_record_t *ap_list = malloc(sizeof(wifi_ap_record_t) * ap_count);
+    if (!ap_list) return -1;
+    esp_wifi_scan_get_ap_records(&ap_count, ap_list);
+
+    ESP_LOGI(TAG, "Scan: %d AP(s) visible:", ap_count);
+    for (int j = 0; j < (int)ap_count; j++)
+        ESP_LOGI(TAG, "  [%2d] RSSI=%4d  ch=%2d  %s",
+                 j, ap_list[j].rssi, ap_list[j].primary,
+                 (char *)ap_list[j].ssid);
+
+    uint8_t net_count = nvs_get_net_count();
+    int found = -1;
+    for (int i = 0; i < (int)net_count && found < 0; i++) {
+        char ssid[64], pass[64];
+        if (nvs_read_network(i, ssid, sizeof(ssid), pass, sizeof(pass)) != ESP_OK) continue;
+        for (int j = 0; j < (int)ap_count; j++) {
+            if (strcmp(ssid, (char *)ap_list[j].ssid) == 0) {
+                ESP_LOGI(TAG, "Scan: matched known network[%d] '%s'", i, ssid);
+                found = i;
+                break;
+            }
+        }
+    }
+    if (found < 0)
+        ESP_LOGI(TAG, "Scan: no known networks among %d visible APs", ap_count);
+
+    free(ap_list);
+    return found;
+}
+
+static int get_ap_client_count(void) {
+    wifi_sta_list_t sta_list;
+    if (esp_wifi_ap_get_sta_list(&sta_list) != ESP_OK) return 0;
+    return sta_list.num;
+}
+
+/* Runs during provisioning: if no client is connected to the AP, scan for
+   known networks and reboot to connect when one appears. */
+static void provisioning_rescan_task(void *arg) {
+    while (1) {
+        vTaskDelay(pdMS_TO_TICKS(RESCAN_INTERVAL_MS));
+
+        int clients = get_ap_client_count();
+        if (clients > 0) {
+            ESP_LOGI(TAG, "Rescan skipped: %d client(s) on AP", clients);
+            continue;
+        }
+
+        ESP_LOGI(TAG, "Rescan: no AP clients, scanning for known networks...");
+        int idx = scan_find_known_network();
+        if (idx >= 0) {
+            ESP_LOGI(TAG, "Rescan: network[%d] visible, rebooting to connect", idx);
+            vTaskDelay(pdMS_TO_TICKS(500));
+            esp_restart();
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -393,9 +447,10 @@ static void connect_to_network(int idx) {
 static void sta_event_handler(void *arg, esp_event_base_t event_base,
                                int32_t event_id, void *event_data) {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
-        s_current_net_idx     = 0;
+        /* s_current_net_idx is pre-set to the first visible network from the
+           boot-time scan; don't reset it here. */
         s_current_net_retries = 0;
-        connect_to_network(0);
+        connect_to_network(s_current_net_idx);
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         s_current_net_retries++;
         ESP_LOGW(TAG, "STA disconnected, net[%d] attempt %d/%d",
@@ -425,30 +480,54 @@ static void sta_event_handler(void *arg, esp_event_base_t event_base,
     }
 }
 
-static int start_sta(void) {
+// ---------------------------------------------------------------------------
+// WiFi init / mode helpers
+// ---------------------------------------------------------------------------
+
+/* One-time initialisation: netif, event loop, WiFi driver, STA netif.
+   Does NOT start WiFi — caller sets mode and calls esp_wifi_start(). */
+static void wifi_common_init(void) {
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     esp_netif_create_default_wifi_sta();
-
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+}
 
+/* Start WiFi in STA mode and begin connecting from s_current_net_idx. */
+static int start_sta(void) {
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
                                                &sta_event_handler, NULL));
     ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
                                                &sta_event_handler, NULL));
-
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-
-    /* Performance settings applied before start */
     ESP_ERROR_CHECK(esp_wifi_set_bandwidth(WIFI_IF_STA, WIFI_BW_HT40));
     ESP_ERROR_CHECK(esp_wifi_set_protocol(WIFI_IF_STA,
                     WIFI_PROTOCOL_11B | WIFI_PROTOCOL_11G | WIFI_PROTOCOL_11N));
     ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
-
-    /* Actual SSID/pass are set inside WIFI_EVENT_STA_START → connect_to_network(0) */
     ESP_ERROR_CHECK(esp_wifi_start());
     return 0;
+}
+
+/* Start WiFi in APSTA mode (AP for provisioning, STA interface for scanning).
+   Assumes wifi_common_init() has already been called and WiFi is stopped. */
+static void start_softap(void) {
+    esp_netif_create_default_wifi_ap();
+
+    wifi_config_t ap_config = {
+        .ap = {
+            .ssid           = SOFTAP_SSID,
+            .ssid_len       = strlen(SOFTAP_SSID),
+            .channel        = SOFTAP_CHANNEL,
+            .password       = "",
+            .max_connection = SOFTAP_MAX_CONN,
+            .authmode       = WIFI_AUTH_OPEN,
+        },
+    };
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &ap_config));
+    ESP_ERROR_CHECK(esp_wifi_start());
+    ESP_LOGI(TAG, "SoftAP started: SSID='%s', open, IP=192.168.4.1", SOFTAP_SSID);
 }
 
 // ---------------------------------------------------------------------------
@@ -493,17 +572,36 @@ int ProvisioningStart(EventGroupHandle_t *wifi_event_group_out) {
         nvs_seed_defaults();
     }
 
+    wifi_common_init();
+
     uint8_t count = nvs_get_net_count();
     if (count > 0) {
-        ESP_LOGI(TAG, "%d known network(s) in NVS, starting STA mode", count);
-        return start_sta();
+        ESP_LOGI(TAG, "%d known network(s) in NVS, scanning to find visible ones...", count);
+        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+        ESP_ERROR_CHECK(esp_wifi_start());
+
+        int visible_idx = scan_find_known_network();
+        ESP_ERROR_CHECK(esp_wifi_stop());
+
+        if (visible_idx >= 0) {
+            ESP_LOGI(TAG, "Network[%d] is visible, starting STA mode", visible_idx);
+            s_current_net_idx = visible_idx;
+            return start_sta();
+        }
+        ESP_LOGI(TAG, "No known networks in range, entering provisioning mode");
+    } else {
+        ESP_LOGI(TAG, "No stored networks, entering provisioning mode");
     }
 
-    ESP_LOGI(TAG, "No known networks, starting SoftAP provisioning mode");
+    /* Provisioning: AP up for manual config, STA interface available for
+       periodic rescans while waiting for a client to connect. */
     start_softap();
     start_provisioning_server();
+    xTaskCreate(provisioning_rescan_task, "prov_rescan", 4096, NULL, 5, NULL);
 
-    /* Block forever — reboot happens inside handle_post_configure after save */
+    /* Block here — exit is either via reboot in handle_post_configure (user
+       submitted credentials) or reboot in provisioning_rescan_task (known
+       network appeared in range). */
     while (1) {
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
